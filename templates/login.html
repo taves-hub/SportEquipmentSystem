@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="login-root d-flex" style="min-height:80vh;">
+    <div class="login-hero flex-grow-1">
+        <div class="slideshow" aria-hidden="false">
+            <img src="{{ url_for('static', filename='pictures/3X3 CHAMPIONSHIP.jpg') }}" alt="slide-1" class="slide active">
+            <img src="{{ url_for('static', filename='pictures/3X3 CHAMPIONSHIP IN  EGYPT.jpg') }}" alt="slide-2" class="slide">
+            <img src="{{ url_for('static', filename='pictures/Unesco 02.jpg') }}" alt="slide-3" class="slide">
+            <img src="{{ url_for('static', filename='pictures/Unesco 03.jpg') }}" alt="slide-4" class="slide">
+            <img src="{{ url_for('static', filename='pictures/Volleyball Men.jpg') }}" alt="slide-5" class="slide">
+            <img src="{{ url_for('static', filename='pictures/VOLLEYBALL WOMEN.jpg') }}" alt="slide-6" class="slide">
+        </div>
+        <!--<div class="hero-overlay">
+            <div class="hero-text">Stronger Together <br> Through Sport <br/>We Win</div>
+        </div> -->
+
+    </div>
+    <div class="login-panel d-flex align-items-center justify-content-center">
+        <div style="width:100%; max-width:520px; padding:2rem;">
+            <div class="text-center mb-3">
+                <img src="{{ url_for('static', filename='logo.jpeg') }}" alt="Logo" class="login-brand mx-auto d-block" style="width:96px; height:auto;">
+                <h1 class="welcome-title">Hi, welcome back</h1>
+                <p class="text-muted">Please fill in your details to log in</p>
+            </div>
+            <div class="card shadow-sm border-0 rounded-lg">
+                <div class="card-body p-4">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} mb-2 py-2">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    <form method="POST" autocomplete="off">
+                        <div class="mb-3">
+                            <label for="username" class="form-label fw-bold">Username</label>
+                            <input type="text" class="form-control" id="username" name="username" placeholder="Username" required autofocus>
+                        </div>
+                        <div class="mb-3 position-relative">
+                            <label for="password" class="form-label fw-bold">Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" name="password" placeholder="Enter your Password" required>
+                                <button type="button" class="btn btn-outline-secondary" id="togglePassword" tabindex="-1" aria-label="Show password">👁️</button>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success btn-lg">Sign In</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .login-root { background: #f7f7fb; min-height:100vh; }
+    .login-hero { flex:1 1 60%; position:relative; overflow:hidden; min-width:0; }
+    .slideshow { position:absolute; inset:0; }
+    .slideshow .slide { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity 1s ease-in-out; display:block; }
+    .slideshow .slide.active { opacity:1; }
+    .hero-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.24); display:flex; align-items:center; justify-content:center; }
+    .hero-text { color:#fff; font-weight:800; font-size:48px; text-align:center; letter-spacing:1px; text-transform:uppercase; padding:0 2rem; z-index:5; max-width:90%; }
+    .login-panel { flex:0 0 40%; background:transparent; padding:3rem 2rem; min-width:320px; }
+    .welcome-title { color:#4CAF50; font-weight:700; font-size:40px; margin-top:0.5rem; }
+    .rounded-lg { border-radius:10px; }
+
+    /* Responsive behavior */
+    @media (max-width: 1200px) {
+        .hero-text { font-size:40px; }
+        .welcome-title { font-size:34px; }
+    }
+    @media (max-width: 992px) {
+        .login-root { flex-direction:column; }
+        .login-hero { height:300px; order:0; }
+        .hero-text { font-size:28px; }
+        .login-panel { order:1; flex: none; padding:1.5rem; min-width:0; width:100%; }
+        .login-panel .card { margin:0 auto; }
+    }
+    @media (max-width: 576px) {
+        .hero-text { font-size:20px; }
+        .welcome-title { font-size:22px; }
+        .login-hero { height:220px; }
+        .login-panel { padding:1rem; }
+        .slideshow .slide { background-position:center; }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function(){
+        var toggle = document.getElementById('togglePassword');
+        var pwd = document.getElementById('password');
+        if(toggle && pwd){
+            toggle.addEventListener('click', function(){
+                if(pwd.type === 'password'){ pwd.type = 'text'; toggle.textContent = '🙈'; }
+                else { pwd.type = 'password'; toggle.textContent = '👁️'; }
+            });
+        }
+        // Simple slideshow for hero
+        (function(){
+            var slides = document.querySelectorAll('.slideshow .slide');
+            if(!slides || slides.length <= 1) return;
+            var idx = 0;
+            setInterval(function(){
+                slides[idx].classList.remove('active');
+                idx = (idx + 1) % slides.length;
+                slides[idx].classList.add('active');
+            }, 4000);
+        })();
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sports Equipment Clearance System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    html, body {
+      height: 100%;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+  </style>
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-success">
+  <div class="container">
+    <a class="navbar-brand" href="{% if current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.dashboard') }}{% else %}{{ url_for('admin.dashboard') }}{% endif %}">UoN Sports System</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto">
+        {% if current_user.get_id().startswith('storekeeper-') %}
+          <li class="nav-item"><a href="{{ url_for('storekeeper.dashboard') }}" class="nav-link">Dashboard</a></li>
+          <li class="nav-item"><a href="{{ url_for('storekeeper.equipment') }}" class="nav-link">Equipment</a></li>
+          <li class="nav-item"><a href="{{ url_for('storekeeper.issue') }}" class="nav-link">Issue</a></li>
+          <li class="nav-item"><a href="{{ url_for('storekeeper.issued_equipment') }}" class="nav-link">Issued Equipment</a></li>
+          <li class="nav-item"><a href="{{ url_for('storekeeper.return_equipment') }}" class="nav-link">Return</a></li>
+          <li class="nav-item"><a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a></li>
+        {% else %}
+          <li class="nav-item"><a href="{{ url_for('admin.dashboard') }}" class="nav-link">Dashboard</a></li>
+          <li class="nav-item"><a href="{{ url_for('admin.equipment') }}" class="nav-link">Equipment</a></li>
+          <li class="nav-item"><a href="{{ url_for('admin.issue') }}" class="nav-link">Issue</a></li>
+          <li class="nav-item"><a href="{{ url_for('admin.issued_equipment') }}" class="nav-link">Issued Equipment</a></li>
+          <li class="nav-item"><a href="{{ url_for('admin.return_equipment') }}" class="nav-link">Return</a></li>
+          <li class="nav-item"><a href="{{ url_for('admin.clearance_report') }}" class="nav-link">Clearance</a></li>
+          <li class="nav-item"><a href="{{ url_for('admin.reports') }}" class="nav-link">Reports</a></li>
+          <li class="nav-item"><a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a></li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
+    {% endif %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="container mt-2">
+    {% for category, message in messages %}
+      <div class="alert alert-{{category}}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+  
+  {% block content %}{% endblock %}
+
+  {% block footer %}
+  <!-- Minimal Footer -->
+  <footer class="bg-light py-2 border-top site-footer" style="flex-shrink:0;">
+    <div class="container text-center" style="font-size:0.85rem;">
+      <p class="mb-0">© {{ now.year }} UoN Sports Equipment System</p>
+    </div>
+  </footer>
+  {% endblock %}
+  <!-- Bootstrap JS (bundle includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

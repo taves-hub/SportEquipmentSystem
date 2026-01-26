@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h3 class="text-center mb-4 text-primary">Issue Equipment</h3>
+
+  <form method="POST" action="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.issue') }}{% else %}{{ url_for('admin.issue') }}{% endif %}" class="border p-4 rounded shadow-sm bg-light">
+    <div class="mb-3">
+      <label for="person_type" class="form-label">Issue To</label>
+      <select name="person_type" id="person_type" class="form-select" required onchange="togglePersonFields()">
+        <option value="student">Student</option>
+        <option value="staff">Staff/Trainer</option>
+      </select>
+    </div>
+    <div id="student-fields">
+      <div class="mb-3">
+        <label for="student_id" class="form-label">Student ID</label>
+        <input type="text" name="student_id" id="student_id" class="form-control">
+      </div>
+      <div class="mb-3">
+        <label for="student_name" class="form-label">Student Name</label>
+        <input type="text" name="student_name" id="student_name" class="form-control">
+      </div>
+      <div class="mb-3">
+        <label for="student_email" class="form-label">Student Email</label>
+        <input type="email" name="student_email" id="student_email" class="form-control" placeholder="student@example.edu">
+      </div>
+      <div class="mb-3">
+        <label for="student_phone" class="form-label">Student Phone</label>
+        <input type="text" name="student_phone" id="student_phone" class="form-control" placeholder="0712345678" pattern="0[0-9]{9}" title="Enter a 10-digit phone number starting with 0">
+      </div>
+    </div>
+    <div id="staff-fields" style="display:none;">
+      <div class="mb-3">
+        <label for="staff_payroll" class="form-label">Payroll Number</label>
+        <input type="text" name="staff_payroll" id="staff_payroll" class="form-control">
+      </div>
+      <div class="mb-3">
+        <label for="staff_name" class="form-label">Staff/Trainer Name</label>
+        <input type="text" name="staff_name" id="staff_name" class="form-control">
+      </div>
+      <div class="mb-3">
+        <label for="staff_email" class="form-label">Staff/Trainer Email</label>
+        <input type="email" name="staff_email" id="staff_email" class="form-control" placeholder="staff@example.edu">
+      </div>
+    </div>
+    <div class="mb-3">
+      <label for="equipment_id" class="form-label">Select Equipment</label>
+      <select name="equipment_id" id="equipment_id" class="form-select" required>
+        {% for eq in equipment %}
+          <option value="{{ eq.id }}">{{ eq.category }} ({{ eq.name }}) - Available: {{ eq.quantity }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="quantity" class="form-label">Quantity to Issue</label>
+      <input type="number" name="quantity" id="quantity" class="form-control" min="1" required>
+    </div>
+    <div id="serial-numbers-container" class="mb-3">
+      <!-- Serial number fields will be added here dynamically -->
+    </div>
+    <div class="mb-3">
+      <label for="expected_return" class="form-label">Due Date <span class="text-danger">*</span></label>
+      <input type="date" name="expected_return" id="expected_return" class="form-control" required>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Issue Equipment</button>
+  </form>
+</div>
+<script>
+  function togglePersonFields() {
+    var type = document.getElementById('person_type').value;
+    var studentFields = document.getElementById('student-fields');
+    var staffFields = document.getElementById('staff-fields');
+    
+    if (type === 'student') {
+      studentFields.style.display = '';
+      staffFields.style.display = 'none';
+      // Set required for student fields
+      document.getElementById('student_id').required = true;
+      document.getElementById('student_name').required = true;
+      document.getElementById('student_email').required = true;
+      document.getElementById('student_phone').required = true;
+      // Remove required for staff fields
+      document.getElementById('staff_payroll').required = false;
+      document.getElementById('staff_name').required = false;
+      document.getElementById('staff_email').required = false;
+    } else if (type === 'staff') {
+      studentFields.style.display = 'none';
+      staffFields.style.display = '';
+      // Remove required for student fields
+      document.getElementById('student_id').required = false;
+      document.getElementById('student_name').required = false;
+      document.getElementById('student_email').required = false;
+      document.getElementById('student_phone').required = false;
+      // Set required for staff fields
+      document.getElementById('staff_payroll').required = true;
+      document.getElementById('staff_name').required = true;
+      document.getElementById('staff_email').required = true;
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', function() {
+    togglePersonFields();
+    updateSerialNumberFields(); // Initialize serial number fields
+    
+    // Add input event listener to quantity field for real-time updates
+    document.getElementById('quantity').addEventListener('input', updateSerialNumberFields);
+  });
+  
+  function updateSerialNumberFields() {
+    const quantity = parseInt(document.getElementById('quantity').value) || 0;
+    const container = document.getElementById('serial-numbers-container');
+    container.innerHTML = ''; // Clear existing fields
+    
+    if (quantity > 0) {
+      const label = document.createElement('label');
+      label.className = 'form-label';
+      label.textContent = 'Serial Numbers';
+      container.appendChild(label);
+      
+      const small = document.createElement('small');
+      small.className = 'text-muted d-block mb-2';
+      small.textContent = 'Enter unique serial number for each item (optional)';
+      container.appendChild(small);
+      
+      for (let i = 1; i <= quantity; i++) {
+        const div = document.createElement('div');
+        div.className = 'mb-2';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.name = 'serial_numbers';
+        input.className = 'form-control serial-number-input';
+        input.placeholder = `Serial number for item ${i} (e.g. SN123456)`;
+        input.setAttribute('data-index', i);
+        
+        // Add event listener for uniqueness validation
+        input.addEventListener('input', validateSerialNumbers);
+        
+        div.appendChild(input);
+        container.appendChild(div);
+      }
+    }
+  }
+  
+  function validateSerialNumbers() {
+    const inputs = document.querySelectorAll('.serial-number-input');
+    const values = Array.from(inputs).map(input => input.value.trim()).filter(val => val !== '');
+    const duplicates = values.filter((val, index) => values.indexOf(val) !== index);
+    const submitBtn = document.querySelector('button[type="submit"]');
+    
+    // Remove existing error messages
+    document.querySelectorAll('.serial-error').forEach(el => el.remove());
+    
+    if (duplicates.length > 0) {
+      // Show error for duplicate values
+      inputs.forEach(input => {
+        if (duplicates.includes(input.value.trim())) {
+          const errorDiv = document.createElement('div');
+          errorDiv.className = 'text-danger serial-error';
+          errorDiv.textContent = 'This serial number is already used for another item.';
+          input.parentNode.appendChild(errorDiv);
+        }
+      });
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Fix Duplicate Serial Numbers';
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Issue Equipment';
+    }
+  }
+  
+  // Set the min attribute for expected return date to today so past dates cannot be selected
+  (function() {
+    try {
+      const input = document.getElementById('expected_return');
+      if (input) {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        input.min = `${yyyy}-${mm}-${dd}`;
+      }
+    } catch (e) {
+      // fail silently
+      console.error(e);
+    }
+  })();
+</script>
+{% endblock %}

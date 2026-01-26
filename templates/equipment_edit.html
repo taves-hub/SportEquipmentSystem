@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h3 class="text-center mb-4 text-primary">Edit Equipment</h3>
+
+  <form method="POST" action="{{ url_for('admin.equipment_edit', equipment_id=equipment.id) }}" class="border p-4 rounded shadow-sm bg-light">
+    <div class="mb-3">
+      <label for="category" class="form-label">Category</label>
+      <input type="text" name="category" id="category" class="form-control" value="{{ equipment.category }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="category_code" class="form-label">Category Code</label>
+      <div class="input-group">
+        <input type="text" name="category_code" id="category_code" class="form-control" value="{{ equipment.category_code }}" required maxlength="10" pattern="[A-Za-z0-9]+" title="Only letters and numbers allowed" readonly>
+        <span class="input-group-text">
+          <input class="form-check-input ms-0" type="checkbox" id="edit_code_chk" aria-label="Enable editing category code">
+        </span>
+      </div>
+      <small class="text-muted">Unique code (letters and numbers only). Check the box to edit.</small>
+    </div>
+    <div class="mb-3">
+      <label for="serial_number" class="form-label">Serial Number</label>
+      <div class="input-group">
+        <input type="text" name="serial_number" id="serial_number" class="form-control" value="{{ equipment.serial_number }}" required maxlength="50" pattern="[A-Za-z0-9]+" title="Only letters and numbers allowed" readonly>
+        <span class="input-group-text">
+          <input class="form-check-input ms-0" type="checkbox" id="edit_serial_chk" aria-label="Enable editing serial number">
+        </span>
+      </div>
+      <small class="text-muted">Unique serial number (letters and numbers only). Check the box to edit.</small>
+    </div>
+    <div class="mb-3">
+      <label for="name" class="form-label">Equipment Name</label>
+      <input type="text" name="name" id="name" class="form-control" value="{{ equipment.name }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="quantity" class="form-label">Quantity</label>
+      <input type="number" name="quantity" id="quantity" class="form-control" min="0" value="{{ equipment.quantity }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="condition" class="form-label">Condition</label>
+      <select name="condition" id="condition" class="form-select">
+        <option value="Good" {% if equipment.condition == 'Good' %}selected{% endif %}>Good</option>
+        <option value="Fair" {% if equipment.condition == 'Fair' %}selected{% endif %}>Fair</option>
+        <option value="Poor" {% if equipment.condition == 'Poor' %}selected{% endif %}>Poor</option>
+      </select>
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" {% if equipment.is_active %}checked{% endif %}>
+      <label class="form-check-label" for="is_active">Active (can be issued)</label>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <a href="{{ url_for('admin.equipment') }}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function(){
+    const chk = document.getElementById('edit_code_chk');
+    const code = document.getElementById('category_code');
+    if(!chk || !code) return;
+    // Toggle readonly when checkbox changes
+    chk.addEventListener('change', function(){
+      if(this.checked){
+        code.removeAttribute('readonly');
+        code.focus();
+        code.select && code.select();
+      } else {
+        code.setAttribute('readonly','');
+      }
+    });
+  })();
+
+  (function(){
+    const chk = document.getElementById('edit_serial_chk');
+    const serial = document.getElementById('serial_number');
+    if(!chk || !serial) return;
+    // Toggle readonly when checkbox changes
+    chk.addEventListener('change', function(){
+      if(this.checked){
+        serial.removeAttribute('readonly');
+        serial.focus();
+        serial.select && serial.select();
+      } else {
+        serial.setAttribute('readonly','');
+      }
+    });
+  })();
+</script>
+{% endblock %}

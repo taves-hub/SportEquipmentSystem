@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 0.3cm;
+    }
+  }
+</style>
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    <h3 class="text-primary mb-0">Issued Items Report</h3>
+    <div style="width: 85px;"></div><!-- Spacer for alignment -->
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <form method="get" class="d-flex" action="{{ url_for('admin.issued_report') }}">
+        <select name="equipment_id" class="form-select me-2">
+          <option value="All" {% if selected_equipment == 'All' %}selected{% endif %}>All Equipment</option>
+          {% for eq in equipments %}
+          <option value="{{ eq.id }}" {% if selected_equipment|string == eq.id|string %}selected{% endif %}>{{ eq.name }} ({{ eq.category }})</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-primary" type="submit">Filter</button>
+      </form>
+    </div>
+    <div class="col-md-6 d-flex justify-content-end align-items-center">
+      <div>
+        <a href="{{ url_for('admin.issued_report', equipment_id=selected_equipment, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        <!-- Print PDF will open the browser print dialog; user may choose 'Save as PDF' -->
+        <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Print PDF</button>
+      </div>
+    </div>
+  </div>
+  <div class="table-responsive">
+  <table class="table table-bordered table-striped align-middle small">
+    <thead class="table-dark">
+      <tr>
+        <th>Recipient ID</th>
+        <th>Recipient Name</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th>Equipment Name</th>
+        <th>Category</th>
+        <th>Quantity</th>
+        <th>Issuer Name</th>
+        <th>Issuer Email</th>
+        <th>Issuer ID</th>
+        <th>Date Issued</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for issue in issued_items %}
+      <tr>
+      <td>{{ issue.staff_payroll or issue.student_id }}</td>
+      <td>{{ issue.staff_name or issue.student_name }}</td>
+      <td>{{ (issue.staff_email or issue.student_email) or '—' }}</td>
+      <td>{{ issue.student_phone or '—' }}</td>
+      <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
+        <td>{{ issue.equipment.category if issue.equipment else '' }}</td>
+        <td>{{ issue.quantity }}</td>
+        <td>{{ issuer_info[issue.id]['name'] }}</td>
+        <td>{{ issuer_info[issue.id]['email'] }}</td>
+        <td>{{ issuer_info[issue.id]['id'] }}</td>
+        <td>{{ issue.date_issued.strftime('%Y-%m-%d') }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="11" class="text-center text-muted">No items currently issued.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <!-- Pagination -->
+  {% if total_pages and total_pages > 1 %}
+  <nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+      <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('admin.issued_report', equipment_id=selected_equipment, page=page-1, per_page=per_page) }}">Previous</a>
+      </li>
+      <li class="page-item disabled"><a class="page-link">Page {{ page }} of {{ total_pages }}</a></li>
+      <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('admin.issued_report', equipment_id=selected_equipment, page=page+1, per_page=per_page) }}">Next</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

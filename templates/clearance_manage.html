@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.clearance_report', student_id=student_id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    {% set student_name = items[0].student_name if items|length > 0 else '' %}
+    <h4 class="mb-0">Clearance Management</h4>
+    <div style="width: 85px;"></div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <p class="mb-1"><strong>Student ID:</strong> {{ student_id }}</p>
+      {% if student_name %}
+        <p class="mb-1"><strong>Student Name:</strong> {{ student_name }}</p>
+      {% endif %}
+      <p class="mb-0"><strong>Items found:</strong> {{ items|length }}</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped align-middle small">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>Equipment</th>
+          <th>Qty</th>
+          <th>Date Issued</th>
+          <th>Status</th>
+          <th>Return Condition</th>
+          <th>Date Returned</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ it.equipment.name if it.equipment else it.equipment_id }}</td>
+          <td>{{ it.quantity }}</td>
+          <td>{{ it.date_issued.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {% if it.status == 'Returned' %}
+              <span class="badge bg-success">Returned</span>
+            {% else %}
+              <span class="badge bg-warning">Issued</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if it.return_condition %}
+              {% if it.return_condition == 'Good' %}
+                <span class="text-success">Good</span>
+              {% elif it.return_condition == 'Damaged' %}
+                <div>
+                  <span class="text-warning">Damaged</span>
+                  <div class="form-check mt-1">
+                    <input class="form-check-input" type="checkbox" name="replaced_{{ it.id }}" id="replaced_{{ it.id }}">
+                    <label class="form-check-label small" for="replaced_{{ it.id }}">Replaced</label>
+                  </div>
+                </div>
+              {% elif it.return_condition == 'Lost' %}
+                <div>
+                  <span class="text-danger">Lost</span>
+                  <div class="form-check mt-1">
+                    <input class="form-check-input" type="checkbox" name="replaced_{{ it.id }}" id="replaced_{{ it.id }}">
+                    <label class="form-check-label small" for="replaced_{{ it.id }}">Replaced</label>
+                  </div>
+                </div>
+              {% else %}
+                <span class="text-muted">{{ it.return_condition }}</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if it.date_returned %}
+              {{ it.date_returned.strftime('%Y-%m-%d') }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted">No issued items found for this student.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" class="mt-4">
+    <button type="submit" class="btn btn-success">Proceed to Clear Student</button>
+    <a href="{{ url_for('admin.clearance_report', student_id=student_id) }}" class="btn btn-outline-secondary">Cancel</a>
+  </form>
+</div>
+{% endblock %}

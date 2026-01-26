@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 0.3cm;
+    }
+  }
+</style>
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    <h3 class="text-info mb-0">Total Equipment Report</h3>
+    <div style="width: 85px;"></div><!-- Spacer for alignment -->
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <form method="get" class="d-flex" action="{{ url_for('admin.equipment_report') }}">
+        <input type="text" name="name" class="form-control me-2" placeholder="Search by equipment name or category code..." value="{{ search_name or '' }}">
+        <button class="btn btn-primary" type="submit">Search</button>
+        {% if search_name %}
+          <a href="{{ url_for('admin.equipment_report') }}" class="btn btn-outline-secondary ms-2">Clear</a>
+        {% endif %}
+      </form>
+    </div>
+    <div class="col-md-6 d-flex justify-content-end align-items-center">
+        <div>
+        <a href="{{ url_for('admin.equipment_report', name=search_name, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        <!-- Print PDF will open the browser print dialog; user may choose 'Save as PDF' -->
+        <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Print PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped table-hover small">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Category</th>
+          <th>Name</th>
+          <th>Category Code</th>
+          <th>Total Quantity</th>
+          <th>Available</th>
+          <th>Issued</th>
+          <th>Damaged</th>
+          <th>Lost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for equipment in equipments %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ equipment.category }}</td>
+          <td>{{ equipment.name }}</td>
+          <td>{{ equipment.category_code }}</td>
+          <td>{{ equipment.quantity }}</td>
+          <td>{{ equipment.available_quantity }}</td>
+          <td>{{ equipment.issued_count }}</td>
+          <td>{{ equipment.damaged_count }}</td>
+          <td>{{ equipment.lost_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+      {% if pagination.has_prev %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.equipment_report', page=pagination.prev_num, name=search_name) }}">Previous</a>
+      </li>
+      {% endif %}
+      
+      {% for page in pagination.iter_pages() %}
+        {% if page %}
+          <li class="page-item {% if page == pagination.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('admin.equipment_report', page=page, name=search_name) }}">{{ page }}</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+      {% endfor %}
+
+      {% if pagination.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.equipment_report', page=pagination.next_num, name=search_name) }}">Next</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endblock %}

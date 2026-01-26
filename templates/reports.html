@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h3 class="text-center text-dark mb-4">Reports & Analytics</h3>
+
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <a href="{{ url_for('admin.equipment_report') }}" style="text-decoration: none;">
+        <div class="card text-center shadow-sm h-100">
+          <div class="card-body">
+            <h6>Total Equipment</h6>
+            <h3>{{ total_equipment }}</h3>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{{ url_for('admin.issued_report') }}" style="text-decoration: none;">
+        <div class="card text-center shadow-sm h-100">
+          <div class="card-body">
+            <h6>Issued Items</h6>
+            <h3>{{ issued_count }}</h3>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-3">
+      <a href="{{ url_for('admin.returned_report') }}" style="text-decoration: none;">
+        <div class="card text-center shadow-sm h-100">
+          <div class="card-body">
+            <h6>Returned Items</h6>
+            <h3>{{ returned_count }}</h3>
+          </div>
+        </div>
+      </a>
+    </div>
+    <!-- Clearance card removed from reports page per UX change; link moved to navbar -->
+  </div>
+
+  <!-- Charts row: Inventory stacked bar, Time-series, Return-condition donut -->
+  <div class="row mb-4">
+    <div class="col-lg-6 mb-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="card-title">Inventory breakdown (Top items)</h6>
+          <canvas id="inventoryChart" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6 mb-3">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="card-title">Issues / Returns (last 30 days)</h6>
+          <canvas id="timeSeriesChart" height="180"></canvas>
+        </div>
+      </div>
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h6 class="card-title">Return conditions</h6>
+          <canvas id="returnDonut" height="140"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Helper: fetch JSON and return parsed object
+async function fetchJson(url){
+  const res = await fetch(url, {cache: 'no-store'});
+  if(!res.ok) throw new Error('Network response was not ok');
+  return res.json();
+}
+
+let inventoryChart, timeSeriesChart, returnDonutChart;
+
+function createInventoryChart(data){
+  const ctx = document.getElementById('inventoryChart').getContext('2d');
+  if(inventoryChart) inventoryChart.destroy();
+  inventoryChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.labels,
+      datasets: [
+        { label: 'Available', data: data.available, backgroundColor: '#4caf50' },
+        { label: 'Issued', data: data.issued, backgroundColor: '#2196f3' },
+        { label: 'Damaged', data: data.damaged, backgroundColor: '#ff9800' },
+        { label: 'Lost', data: data.lost, backgroundColor: '#f44336' },
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { x: { stacked: true }, y: { stacked: true } }
+    }
+  });
+}
+
+function createReturnDonut(data){
+  const ctx = document.getElementById('returnDonut').getContext('2d');
+  if(returnDonutChart) returnDonutChart.destroy();
+  returnDonutChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: data.labels, datasets: [{ data: data.data, backgroundColor: ['#4caf50','#ff9800','#f44336'] }] },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+}
+
+function createTimeSeries(data){
+  const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+  if(timeSeriesChart) timeSeriesChart.destroy();
+  timeSeriesChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [
+        { label: 'Issued', data: data.issued, borderColor: '#2196f3', fill: true, backgroundColor: 'rgba(33,150,243,0.08)' },
+        { label: 'Returned', data: data.returned, borderColor: '#4caf50', fill: true, backgroundColor: 'rgba(76,175,80,0.06)' }
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } }, interaction: { intersect: false, mode: 'index' } }
+  });
+}
+
+// Fetch and render all charts
+async function renderCharts(){
+  try{
+    const inv = await fetchJson('{{ url_for("admin.api_inventory_top") }}?top=10');
+    createInventoryChart(inv);
+
+    const donut = await fetchJson('{{ url_for("admin.api_return_conditions") }}');
+    createReturnDonut(donut);
+
+    const ts = await fetchJson('{{ url_for("admin.api_issues_timeseries") }}?days=30');
+    createTimeSeries(ts);
+  }catch(e){
+    console.error('Error loading chart data', e);
+  }
+}
+
+// Start
+document.addEventListener('DOMContentLoaded', renderCharts);
+</script>
+
+{% endblock %}

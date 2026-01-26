@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container py-5">
+  <h4 class="text-center mb-3">Return Equipment</h4>
+  <div class="card p-4">
+    <div class="mb-4">
+      <form method="get" action="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.return_equipment') }}{% else %}{{ url_for('admin.return_equipment') }}{% endif %}">
+        <div class="input-group">
+          <input type="text" name="recipient_id" class="form-control" placeholder="Enter Student ID or Staff Payroll Number..." value="{{ recipient_id or '' }}" required>
+          <button type="submit" class="btn btn-primary">Search</button>
+        </div>
+      </form>
+      {% if recipient_id %}
+        <div class="mt-2">
+          <a href="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.return_equipment') }}{% else %}{{ url_for('admin.return_equipment') }}{% endif %}" class="btn btn-outline-secondary btn-sm">Clear Search</a>
+        </div>
+      {% endif %}
+
+    {% if recipient_id and recipient_name %}
+      <div class="alert alert-info">
+        <strong>{{ recipient_type }}:</strong> {{ recipient_name }} (ID: {{ recipient_id }})
+      </div>
+    {% endif %}
+
+    {% if display_items %}
+      <form method="post" id="returnForm">
+        <div class="mb-3">
+          <h5>Issued Equipment</h5>
+          <small class="text-muted">Select the equipment items to return and specify their condition.</small>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover table-sm align-middle mb-3 small">
+            <thead class="table-dark">
+              <tr>
+                <th width="50px"><input type="checkbox" id="select-all" class="form-check-input"></th>
+                <th>Equipment</th>
+                <th>Serial Number</th>
+                <th class="d-none d-md-table-cell">Date Issued</th>
+                <th class="d-none d-md-table-cell">Due Date</th>
+                <th>Return Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in display_items %}
+                <tr>
+                  <td>
+                    <input type="checkbox" name="selected_serials" value="{{ item.issue.id }}:{{ item.serial }}" class="form-check-input item-checkbox">
+                  </td>
+                  <td>{{ item.equipment_name }}</td>
+                  <td>{{ item.serial or '—' }}</td>
+                  <td class="d-none d-md-table-cell">{{ item.issue.date_issued.strftime('%Y-%m-%d') }}</td>
+                  <td class="d-none d-md-table-cell">{{ item.issue.expected_return.strftime('%Y-%m-%d') if item.issue.expected_return else '—' }}</td>
+                  <td>
+                    <select name="condition_{{ item.issue.id }}_{{ item.serial }}" class="form-select form-select-sm condition-select" disabled>
+                      <option value="">-- Select --</option>
+                      <option value="Good">Good</option>
+                      <option value="Damaged">Damaged</option>
+                      <option value="Lost">Lost</option>
+                    </select>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <button type="submit" class="btn btn-success" id="confirm-return" disabled>Confirm Return</button>
+          </div>
+          <div class="text-muted small">
+            Total items: {{ display_items|length }}
+          </div>
+        </div>
+      </form>
+    {% elif recipient_id %}
+      <div class="alert alert-warning">
+        No issued equipment found for recipient ID: {{ recipient_id }}
+      </div>
+    {% else %}
+      <div class="alert alert-info">
+        Enter a Student ID or Staff Payroll Number to search for equipment to return.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  // Select all checkbox functionality and condition selection management
+  document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+    const conditionSelects = document.querySelectorAll('.condition-select');
+    const confirmButton = document.getElementById('confirm-return');
+    const returnForm = document.getElementById('returnForm');
+
+    // Function to update condition select states and button
+    function updateUI() {
+      const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+      const checkedCount = checkedBoxes.length;
+
+      // Enable/disable condition selects based on checkbox state
+      itemCheckboxes.forEach((checkbox, index) => {
+        const conditionSelect = conditionSelects[index];
+        if (checkbox.checked) {
+          conditionSelect.disabled = false;
+          conditionSelect.required = true;
+        } else {
+          conditionSelect.disabled = true;
+          conditionSelect.required = false;
+          conditionSelect.value = ''; // Clear selection when unchecked
+        }
+      });
+
+      // Update select all checkbox state
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked = checkedCount === itemCheckboxes.length && itemCheckboxes.length > 0;
+        selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < itemCheckboxes.length;
+      }
+
+      // Update confirm button
+      confirmButton.disabled = checkedCount === 0;
+      confirmButton.textContent = checkedCount === 0 ? 'Confirm Return' : `Confirm Return (${checkedCount})`;
+    }
+
+    // Select all functionality
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', function() {
+        itemCheckboxes.forEach(checkbox => {
+          checkbox.checked = selectAllCheckbox.checked;
+        });
+        updateUI();
+      });
+    }
+
+    // Individual checkbox changes
+    itemCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', updateUI);
+    });
+
+    // Form validation before submission
+    returnForm.addEventListener('submit', function(e) {
+      const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+      let validationPassed = true;
+      let missingConditions = [];
+
+      checkedBoxes.forEach((checkbox, index) => {
+        // Find the corresponding condition select
+        const row = checkbox.closest('tr');
+        const conditionSelect = row.querySelector('.condition-select');
+
+        if (!conditionSelect.value || conditionSelect.value === '') {
+          validationPassed = false;
+          // Get equipment name and serial for error message
+          const equipmentName = row.cells[1].textContent.trim();
+          const serialNumber = row.cells[2].textContent.trim();
+          const itemDesc = serialNumber !== '—' ? `${equipmentName} (${serialNumber})` : equipmentName;
+          missingConditions.push(itemDesc);
+        }
+      });
+
+      if (!validationPassed) {
+        e.preventDefault();
+        alert('Please select a return condition for all selected items:\n\n' + missingConditions.join('\n'));
+        // Focus on the first empty condition select
+        const firstEmpty = document.querySelector('.item-checkbox:checked').closest('tr').querySelector('.condition-select:not([value]):not([value=""])');
+        if (firstEmpty) {
+          firstEmpty.focus();
+        }
+        return false;
+      }
+    });
+
+  });
+</script>
+
+</script>
+{% endblock %}

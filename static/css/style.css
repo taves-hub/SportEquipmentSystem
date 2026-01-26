@@ -1,0 +1,167 @@
+/* Modern minimal theme for Sports Equipment System */
+:root{
+  --brand:#0b6623; /* deep green */
+  --brand-contrast:#ffffff;
+  --muted:#6c757d;
+  --card-bg:#ffffff;
+  --bg-gradient-start:#e9f5ee;
+  --bg-gradient-end:#f7fbf8;
+  --accent:#0d6efd;
+}
+
+html,body{height:100%;}
+body{
+  background: linear-gradient(180deg,var(--bg-gradient-start),var(--bg-gradient-end));
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  color:#212529;
+}
+
+.navbar{box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+.navbar-brand{font-weight:700; color:var(--brand-contrast)!important}
+.navbar .nav-link{color:rgba(255,255,255,0.9); margin-left:0.5rem}
+.navbar .nav-link:hover{color:#fff; text-decoration:underline}
+
+.container .card{border-radius:12px}
+.card{border-radius:12px}
+.card.shadow-sm{box-shadow:0 6px 18px rgba(2,6,23,0.06)}
+.card-header{background:transparent}
+
+/* Login card */
+.login-brand{width:140px;height:140px;object-fit:contain;border-radius:8px;margin-bottom:1.5rem;background:#f8f9fa;padding:12px}
+.card-body form .form-control{border-radius:8px}
+.btn-primary{background:var(--brand);border-color:var(--brand)}
+.btn-primary:hover{background:#0a4f1a}
+
+/* Dashboard cards */
+.card.summary{padding:1rem;border-radius:12px}
+.card.summary h5{color:var(--muted);font-weight:600}
+.card.summary h2{font-size:2rem;font-weight:700}
+
+/* Due alerts */
+.card.border-danger{border-width:1px}
+.card-title.text-danger{color:#b21f1f}
+
+/* Tables */
+.table thead th{background:#0b6623;color:#fff;border-color:transparent}
+.table tbody td{vertical-align:middle}
+.table-striped>tbody>tr:nth-of-type(odd)>*{background:rgba(0,0,0,0.02)}
+
+/* Buttons small */
+.btn-sm{border-radius:8px}
+
+/* Responsive tweaks */
+@media (max-width:576px){
+  .navbar .nav-link{font-size:0.95rem}
+  .card.summary h2{font-size:1.5rem}
+}
+
+/* Site footer (used on admin pages) */
+.site-footer{background:transparent}
+.site-footer a{color:var(--muted);margin-right:0.75rem}
+.site-footer a:hover{color:var(--brand);text-decoration:underline}
+.site-footer .text-muted{color:var(--muted)!important}
+
+@media (max-width:576px){
+  .site-footer .col-md-4{margin-bottom:0.5rem}
+}
+
+/* Print styles - aggressive hiding of all unwanted elements */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  html, body {
+    background: white !important;
+    color: black !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Hide all navigation, buttons, alerts, and interactive elements */
+  nav, .navbar, .navbar-brand, .navbar-nav, .nav-link,
+  .btn, .btn-primary, .btn-secondary, .btn-danger, .btn-outline-secondary,
+  .alert, .alert-success, .alert-danger, .alert-warning, .alert-info,
+  .site-footer, footer, .no-print,
+  .card-header, .card-footer,
+  a[href]:not([href^="#"])::after,
+  .breadcrumb, .pagination {
+    display: none !important;
+  }
+
+  /* Container and layout adjustments */
+  .container, .container-fluid {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Table optimizations for printing */
+  table {
+    width: 100% !important;
+    font-size: 8px !important;
+    page-break-inside: avoid !important;
+    margin-bottom: 10px !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    padding: 2px 3px !important;
+    border: 1px solid #000 !important;
+    font-size: 8px !important;
+    word-wrap: break-word !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  th {
+    background: #f8f8f8 !important;
+    color: black !important;
+    font-weight: bold !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* Heading adjustments */
+  h1, h2, h3, h4, h5, h6 {
+    color: black !important;
+    page-break-after: avoid !important;
+    margin: 5px 0 !important;
+    font-size: 14px !important;
+  }
+
+  h2 { font-size: 16px !important; }
+  h5 { font-size: 12px !important; }
+
+  /* Card adjustments */
+  .card, .card-body {
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Specific report elements */
+  .report-header {
+    text-align: center !important;
+    margin-bottom: 10px !important;
+    page-break-after: avoid !important;
+  }
+
+  .small-muted {
+    color: #666 !important;
+    font-size: 8px !important;
+  }
+
+  /* Force landscape orientation hint */
+  @page {
+    size: A4 landscape;
+    margin: 0.5cm;
+  }
+}

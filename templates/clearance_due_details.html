@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    <h4 class="mb-0">Due Equipment Details for {{ recipient_type }}: {{ recipient_name }} (ID: {{ recipient_id }})</h4>
+    <div style="width: 200px;"></div><!-- Spacer for alignment -->
+  </div>
+
+  {% if due_items %}
+    {% for item in due_items %}
+    <div class="d-flex justify-content-center mb-4">
+      <div class="card shadow" style="width: 50rem;">
+        <div class="card-header bg-warning text-dark">
+          <h5 class="card-title mb-0">Equipment: {{ item.equipment.name if item.equipment else item.equipment_id }}</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <p><strong>Category:</strong> {{ item.equipment.category if item.equipment else '' }}</p>
+              <p><strong>Quantity:</strong> {{ item.quantity }}</p>
+              <p><strong>Date Issued:</strong> {{ item.date_issued.strftime('%Y-%m-%d') if item.date_issued else '—' }}</p>
+            </div>
+            <div class="col-md-6">
+              <p><strong>Expected Return:</strong> {{ item.expected_return.strftime('%Y-%m-%d') if item.expected_return else '—' }}</p>
+              <p><strong>Days Overdue:</strong> 
+                {% if item.expected_return %}
+                  {{ (today - item.expected_return.date()).days }} days
+                {% else %}
+                  N/A
+                {% endif %}
+              </p>
+              <p><strong>Status:</strong> <span class="badge bg-danger">Overdue</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="d-flex justify-content-center">
+      <div class="alert alert-info" role="alert">
+        No due equipment found for this student.
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

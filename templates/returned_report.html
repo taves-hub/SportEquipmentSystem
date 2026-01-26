@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 0.3cm;
+    }
+  }
+</style>
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    <h3 class="text-success mb-0">Returned Items Report</h3>
+    <div style="width: 85px;"></div><!-- Spacer for alignment -->
+  </div>
+
+  <!-- Filter by return condition -->
+  <div class="row mb-3">
+    <div class="col-md-4 ms-auto">
+      <form method="get" class="d-flex" action="{{ url_for('admin.returned_report') }}">
+        <select name="condition" class="form-select me-2">
+          <option value="All" {% if selected_condition == 'All' %}selected{% endif %}>All</option>
+          <option value="Good" {% if selected_condition == 'Good' %}selected{% endif %}>Good</option>
+          <option value="Damaged" {% if selected_condition == 'Damaged' %}selected{% endif %}>Damaged</option>
+          <option value="Lost" {% if selected_condition == 'Lost' %}selected{% endif %}>Lost</option>
+        </select>
+        <button class="btn btn-primary" type="submit">Filter</button>
+      </form>
+    </div>
+    <div class="col-md-4 d-flex justify-content-end align-items-center">
+      <div>
+        <a href="{{ url_for('admin.returned_report', condition=selected_condition, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        <!-- Print PDF will open the browser print dialog; user may choose 'Save as PDF' -->
+        <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Print PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <table class="table table-bordered table-striped align-middle small">
+    <thead class="table-dark">
+      <tr>
+        <th>Recipient ID</th>
+        <th>Recipient Name</th>
+        <th>Equipment Name</th>
+        <th>Category</th>
+        <th>Quantity</th>
+        <th>Date Issued</th>
+        <th>Date Returned</th>
+        <th>Return Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for issue in returned_items %}
+      <tr>
+        <td>{{ issue.staff_payroll or issue.student_id }}</td>
+        <td>{{ issue.staff_name or issue.student_name }}</td>
+        <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
+        <td>{{ issue.equipment.category if issue.equipment else '' }}</td>
+        <td>{{ issue.quantity }}</td>
+        <td>{{ issue.date_issued.strftime('%Y-%m-%d') }}</td>
+        <td>{{ issue.date_returned.strftime('%Y-%m-%d') if issue.date_returned else 'N/A' }}</td>
+        <td>{{ issue.return_condition or 'N/A' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8" class="text-center text-muted">No items have been returned yet.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <!-- Pagination -->
+  {% if total_pages and total_pages > 1 %}
+  <nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+      <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('admin.returned_report', condition=selected_condition, page=page-1, per_page=per_page) }}">Previous</a>
+      </li>
+      <li class="page-item disabled"><a class="page-link">Page {{ page }} of {{ total_pages }}</a></li>
+      <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('admin.returned_report', condition=selected_condition, page=page+1, per_page=per_page) }}">Next</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

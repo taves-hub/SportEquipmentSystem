@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    <h4 class="mb-0">Issued Items Report</h4>
+    <div style="width: 85px;"></div><!-- Spacer for alignment -->
+  </div>
+
+  {% if not is_pdf %}
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <form method="get" class="d-flex gap-2" action="{{ url_for('admin.clearance_report') }}">
+        <input type="text" name="student_id" class="form-control" placeholder="Search by Recipient ID..." value="{{ student_id or '' }}">
+        <button class="btn btn-primary" type="submit">Search</button>
+        {% if student_id %}
+          <a href="{{ url_for('admin.clearance_report') }}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+      </form>
+    </div>
+    <div class="col-md-6 text-end">
+      {% if student_id %}
+      <a href="{{ url_for('admin.clearance_report_print', student_id=student_id) }}" target="_blank" class="btn btn-danger">
+        <i class="fas fa-print"></i> Print PDF
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center mb-4">
+    <h2>Clearance Report</h2>
+    {% if student_id %}
+    <p class="mb-0">Student ID: {{ student_id }}</p>
+    {% endif %}
+    <p class="mb-0">Generated on: {{ generated_on.strftime('%Y-%m-%d %H:%M') }}</p>
+  </div>
+  {% endif %}
+
+  <div class="table-responsive" style="padding-left: 10px; padding-right: 10px;">
+    <table class="table table-bordered table-striped align-middle small">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>Student/Staff Name</th>
+          <th>Student ID</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Equipment</th>
+          <th>Category</th>
+          <th>Qty</th>
+          <th>Date Issued</th>
+          <th>Expected Return</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for issue in issued_items %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ issue.student_name or issue.staff_name or '—' }}</td>
+          <td>{{ issue.student_id or issue.staff_payroll or '—' }}</td>
+          <td>{{ issue.student_email or issue.staff_email or '—' }}</td>
+          <td>{{ issue.student_phone or '—' }}</td>
+          <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
+          <td>{{ issue.equipment.category if issue.equipment else '' }}</td>
+          <td>{{ issue.quantity }}</td>
+          <td>{{ issue.date_issued.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {% if issue.expected_return %}
+              {{ issue.expected_return.strftime('%Y-%m-%d') }}
+            {% else %}
+              <span class="text-muted">Not specified</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if issue.status == 'Returned' %}
+              <span class="badge bg-success">Returned</span>
+              {% if issue.return_condition %}
+                <div class="small mt-1">
+                  {% if issue.return_condition == 'Good' %}
+                    <span class="text-success">Condition: Good</span>
+                  {% elif issue.return_condition == 'Damaged' %}
+                    <span class="text-warning">Condition: Damaged</span>
+                  {% elif issue.return_condition == 'Lost' %}
+                    <span class="text-danger">Condition: Lost</span>
+                  {% endif %}
+                </div>
+                {% if issue.date_returned %}
+                  <div class="small text-muted">
+                    {{ issue.date_returned.strftime('%Y-%m-%d') }}
+                  </div>
+                {% endif %}
+              {% endif %}
+            {% else %}
+              <span class="badge bg-warning">Issued</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if issue.student_id %}
+              {% set st = clearance_status_map.get(issue.student_id, 'Pending') %}
+              {% if st == 'Cleared' %}
+                <span class="badge bg-success">Cleared</span>
+              {% else %}
+                <span class="badge bg-warning">Pending</span>
+                <div class="mt-1">
+                  <a href="{{ url_for('admin.clearance_manage', student_id=issue.student_id) }}" class="btn btn-sm btn-outline-primary mt-1">Manage</a>
+                </div>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">N/A</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="11" class="text-center text-muted py-3">No equipment issued</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

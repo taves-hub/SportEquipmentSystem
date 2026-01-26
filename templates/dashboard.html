@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h2 class="text-center mb-4">Admin Dashboard</h2>
+  <div class="row text-center">
+    <div class="col-md-4">
+      <div class="card shadow-sm p-3 summary">
+        <h5>Total Equipment</h5>
+        <h2>{{ total_equipment }}</h2>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm p-3 summary">
+        <h5>Items Issued</h5>
+        <h2>{{ total_issued }}</h2>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm p-3 summary">
+        <h5>Students Cleared</h5>
+        <h2>{{ total_cleared }}</h2>
+      </div>
+    </div>
+  </div>
+  
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card border-danger shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h5 class="card-title text-danger">Due Equipment Alerts</h5>
+              <p class="mb-0">{{ due_count or 0 }} items due for return (due date today or earlier)</p>
+            </div>
+            <div>
+              <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#dueDetails" aria-expanded="false" aria-controls="dueDetails">Show Details</button>
+            </div>
+          </div>
+
+          <div class="collapse mt-3" id="dueDetails">
+            {% if all_due_items %}
+            <div class="table-responsive">
+              <table class="table table-sm table-striped small">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Recipient ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in all_due_items %}
+                    <tr>
+                      <td>{{ loop.index }}</td>
+                      <td>{{ item.recipient_id }}</td>
+                      <td>{{ item.recipient_name }}</td>
+                      <td>{{ item.recipient_email or '—' }}</td>
+                      <td class="text-end">
+                        <a href="{{ url_for('admin.clearance_due_details', recipient_id=item.recipient_id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+              <p class="text-muted">No due items found.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

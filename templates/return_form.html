@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h4 class="text-center mb-3">Return Equipment</h4>
+  <div class="card p-4">
+    {% if issue.student_name %}
+      <p><strong>Student:</strong> {{ issue.student_name }}</p>
+      {% if issue.student_id %}
+        <p><strong>Student ID:</strong> {{ issue.student_id }}</p>
+      {% endif %}
+    {% elif issue.staff_name %}
+      <p><strong>Staff:</strong> {{ issue.staff_name }}</p>
+      {% if issue.staff_payroll %}
+        <p><strong>Payroll:</strong> {{ issue.staff_payroll }}</p>
+      {% endif %}
+    {% else %}
+      <p><strong>Person:</strong> —</p>
+    {% endif %}
+    <p><strong>Equipment:</strong> {{ issue.equipment.name if issue.equipment else issue.equipment_id }}</p>
+    <p><strong>Qty issued:</strong> {{ issue.quantity }}</p>
+    {% if serials %}
+      <p><strong>Serial Numbers:</strong></p>
+      <div class="mb-3">
+        {% for serial in serials %}
+          <div class="d-flex align-items-center mb-2">
+            <div class="form-check me-3">
+              <input class="form-check-input" type="checkbox" name="returned_serials" value="{{ serial }}" id="serial_{{ loop.index }}" checked>
+              <label class="form-check-label" for="serial_{{ loop.index }}">
+                {{ serial }}
+              </label>
+            </div>
+            <div class="flex-grow-1">
+              <select name="condition_{{ serial }}" class="form-select" required>
+                <option value="">-- Select condition --</option>
+                <option value="Good">Good</option>
+                <option value="Damaged">Damaged</option>
+                <option value="Lost">Lost</option>
+              </select>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <small class="text-muted">Check the serial numbers of the items being returned and select their condition.</small>
+    {% else %}
+      <form method="post" id="returnForm">
+        <div class="mb-3">
+          <label for="condition" class="form-label">Return condition</label>
+          <select name="condition" id="condition" class="form-select" required>
+            <option value="">-- Select condition --</option>
+            <option value="Good">Good</option>
+            <option value="Damaged">Damaged</option>
+            <option value="Lost">Lost</option>
+          </select>
+        </div>
+        <button class="btn btn-success" type="submit">Confirm Return</button>
+        {% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}
+          <a href="{{ url_for('storekeeper.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
+        {% else %}
+          <a href="{{ url_for('admin.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
+        {% endif %}
+      </form>
+    {% endif %}
+
+    {% if serials %}
+      <form method="post" id="returnForm">
+        <button class="btn btn-success" type="submit">Confirm Return</button>
+        {% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}
+          <a href="{{ url_for('storekeeper.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
+        {% else %}
+          <a href="{{ url_for('admin.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
+        {% endif %}
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  // Validate that all condition selects have a value before form submission
+  document.addEventListener('DOMContentLoaded', function() {
+    const returnForm = document.getElementById('returnForm');
+    if (returnForm) {
+      returnForm.addEventListener('submit', function(e) {
+        // Check for serial number condition selects
+        const conditionSelects = document.querySelectorAll('select[name^="condition_"]');
+        if (conditionSelects.length > 0) {
+          // Serial items - check each condition select
+          let allSelected = true;
+          let missingConditions = [];
+
+          conditionSelects.forEach(function(select) {
+            if (!select.value || select.value === '') {
+              allSelected = false;
+              // Extract serial number from the name attribute (condition_SERIALNUMBER)
+              const serialMatch = select.name.match(/^condition_(.+)$/);
+              if (serialMatch) {
+                missingConditions.push(serialMatch[1]);
+              }
+            }
+          });
+
+          if (!allSelected) {
+            e.preventDefault();
+            alert('Please select a return condition for all serial numbers: ' + missingConditions.join(', '));
+            // Focus on the first empty select
+            const firstEmpty = document.querySelector('select[name^="condition_"]:not([value]):not([value=""])');
+            if (firstEmpty) {
+              firstEmpty.focus();
+            }
+            return false;
+          }
+        } else {
+          // Non-serial item - check the single condition select
+          const singleCondition = document.getElementById('condition');
+          if (singleCondition && (!singleCondition.value || singleCondition.value === '')) {
+            e.preventDefault();
+            alert('Please select a return condition.');
+            singleCondition.focus();
+            return false;
+          }
+        }
+      });
+    }
+  });
+</script>
+
+{% endblock %}

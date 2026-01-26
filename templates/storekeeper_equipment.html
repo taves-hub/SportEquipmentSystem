@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h3 class="text-center mb-4 text-success">Existing Equipment Inventory</h3>
+  
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped align-middle small">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>Category</th>
+          <th>Name</th>
+          <th>Category Code</th>
+          <th>Quantity</th>
+          <th>Condition</th>
+          <th>Date Received</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in equipment %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ item.category }}</td>
+          <td>{{ item.name }}</td>
+          <td>{{ item.category_code }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.condition }}</td>
+          <td>{{ item.date_received.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {% if item.is_active %}
+              <span class="badge bg-success">Active</span>
+            {% else %}
+              <span class="badge bg-secondary">Disabled</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+          <tr>
+            <td colspan="8" class="text-center text-muted">No equipment found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

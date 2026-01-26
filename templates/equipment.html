@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h3 class="text-center mb-4 text-success">Receive New Equipment</h3>
+
+  <form method="POST" action="{{ url_for('admin.equipment') }}" class="border p-4 rounded shadow-sm bg-light">
+    <div class="mb-3">
+      <label for="category_code" class="form-label">Category Code</label>
+      <input type="text" name="category_code" id="category_code" class="form-control" placeholder="e.g. FTB01" required maxlength="10" pattern="[A-Za-z0-9]+" title="Only letters and numbers allowed">
+      <small class="text-muted">Enter the code (letters and numbers only)</small>
+    </div>
+    <div class="mb-3">
+      <label for="category" class="form-label">Category</label>
+      <input type="text" name="category" id="category" class="form-control" placeholder="e.g. Football" required>
+    </div>
+    <div class="mb-3">
+      <label for="name" class="form-label">Equipment Name</label>
+      <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Ball, Net, Racket" required>
+    </div>
+    <div class="mb-3">
+      <label for="quantity" class="form-label">Quantity</label>
+      <input type="number" name="quantity" id="quantity" class="form-control" min="1" required>
+    </div>
+    <button type="submit" class="btn btn-success w-100">Add Equipment</button>
+  </form>
+
+  <hr class="my-5">
+
+  <h4 class="text-center mb-3">Bulk Upload Equipment (CSV)</h4>
+  <form method="POST" action="{{ url_for('admin.equipment_upload') }}" enctype="multipart/form-data" class="border p-3 rounded mb-4 bg-white">
+    <div class="mb-2">
+      <label for="csv_file" class="form-label">Upload CSV or PDF file</label>
+      <input type="file" name="csv_file" id="csv_file" class="form-control" accept=".csv,.pdf" required>
+      <small class="text-muted">CSV columns: name,category,category_code,quantity. PDF should contain a table with these columns. Existing category_code will increment quantity.</small>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="submit" name="action" value="preview" class="btn btn-outline-primary">Preview Upload</button>
+    </div>
+    <small class="text-muted d-block mt-2">After previewing, use the "Confirm and Import" button on the preview page to commit the changes.</small>
+  </form>
+
+  <h4 class="text-center mb-3">Existing Equipment Inventory</h4>
+  <table class="table table-bordered table-striped align-middle small">
+    <thead class="table-dark">
+      <tr>
+        <th>#</th>
+        <th>Category Code</th>
+        <th>Category</th>
+        <th>Name</th>
+        <th>Quantity</th>
+        <th>Condition</th>
+        <th>Date Received</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in equipment %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ item.category_code }}</td>
+        <td>{{ item.category }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.condition }}</td>
+        <td>{{ item.date_received.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {% if item.is_active %}
+              <span class="badge bg-success">Active</span>
+            {% else %}
+              <span class="badge bg-secondary">Disabled</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('admin.equipment_edit', equipment_id=item.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+            <form method="post" action="{{ url_for('admin.equipment_toggle', equipment_id=item.id) }}" style="display:inline">
+              <button type="submit" class="btn btn-sm {% if item.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+                {% if item.is_active %}Disable{% else %}Enable{% endif %}
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('admin.equipment_delete', equipment_id=item.id) }}" style="display:inline" onsubmit="return confirm('Delete this equipment? This cannot be undone.');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+          </td>
+      </tr>
+      {% else %}
+        <tr>
+          <td colspan="9" class="text-center text-muted">No equipment found.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

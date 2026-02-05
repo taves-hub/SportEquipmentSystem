@@ -3,28 +3,176 @@
 <div class="container py-5">
   <h3 class="text-center mb-4 text-success">Receive New Equipment</h3>
 
-  <form method="POST" action="{{ url_for('admin.equipment') }}" class="border p-4 rounded shadow-sm bg-light">
-    <div class="mb-3">
-      <label for="category_code" class="form-label">Category Code</label>
-      <input type="text" name="category_code" id="category_code" class="form-control" placeholder="e.g. FTB01" required maxlength="10" pattern="[A-Za-z0-9]+" title="Only letters and numbers allowed">
-      <small class="text-muted">Enter the code (letters and numbers only)</small>
+  <form method="POST" action="{{ url_for('admin.equipment') }}" class="border p-4 rounded shadow-sm bg-light" id="receiveEquipmentForm">
+    <!-- Step 1: Select Category Code -->
+    <div class="mb-3" id="categoryCodeGroup">
+      <label for="category_code" class="form-label">Category Code <span class="text-danger">*</span></label>
+      <select name="category_code" id="category_code" class="form-select" required>
+        <option value="">-- Select Category Code --</option>
+      </select>
+      <small class="text-muted">Select an existing category code or create a new one.</small>
     </div>
-    <div class="mb-3">
-      <label for="category" class="form-label">Category</label>
-      <input type="text" name="category" id="category" class="form-control" placeholder="e.g. Football" required>
+
+    <!-- Step 2: Select or Enter Category Name -->
+    <div class="mb-3" id="categoryGroup" style="display:none;">
+      <label for="category" class="form-label">Category Name <span class="text-danger">*</span></label>
+      <select name="category" id="category" class="form-select" required>
+        <option value="">-- Select Category Name --</option>
+      </select>
+      <small class="text-muted">Select from existing categories for this code.</small>
     </div>
-    <div class="mb-3">
-      <label for="name" class="form-label">Equipment Name</label>
-      <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Ball, Net, Racket" required>
+
+    <!-- Step 3: Select or Enter Equipment Name -->
+    <div class="mb-3" id="equipmentGroup" style="display:none;">
+      <label for="name" class="form-label">Equipment Name <span class="text-danger">*</span></label>
+      <select name="name" id="name" class="form-select" required>
+        <option value="">-- Select Equipment Name --</option>
+      </select>
+      <small class="text-muted">Select from existing equipment names for this category.</small>
     </div>
-    <div class="mb-3">
-      <label for="quantity" class="form-label">Quantity</label>
-      <input type="number" name="quantity" id="quantity" class="form-control" min="1" required>
+
+    <!-- Step 4: Enter Quantity -->
+    <div class="mb-3" id="quantityGroup" style="display:none;">
+      <label for="quantity" class="form-label">Quantity <span class="text-danger">*</span></label>
+      <input type="number" name="quantity" id="quantity" class="form-control" min="1" placeholder="Enter quantity" required>
+      <small class="text-muted">Number of units to add.</small>
     </div>
-    <button type="submit" class="btn btn-success w-100">Add Equipment</button>
+
+    <div class="d-grid gap-2" id="submitGroup" style="display:none;">
+      <button type="submit" class="btn btn-success">Add Equipment</button>
+    </div>
   </form>
 
   <hr class="my-5">
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const categoryCodeSelect = document.getElementById('category_code');
+  const categorySelect = document.getElementById('category');
+  const equipmentSelect = document.getElementById('name');
+  const quantityInput = document.getElementById('quantity');
+  
+  const categoryCodeGroup = document.getElementById('categoryCodeGroup');
+  const categoryGroup = document.getElementById('categoryGroup');
+  const equipmentGroup = document.getElementById('equipmentGroup');
+  const quantityGroup = document.getElementById('quantityGroup');
+  const submitGroup = document.getElementById('submitGroup');
+
+  // Fetch all existing categories and populate category code dropdown
+  fetch('{{ url_for("admin.api_categories") }}')
+    .then(res => res.json())
+    .then(data => {
+      const codeSet = new Set();
+      const codeToNames = {};
+      
+      // Build a map of codes to their category names
+      data.forEach(cat => {
+        codeSet.add(cat.code);
+        if (!codeToNames[cat.code]) {
+          codeToNames[cat.code] = [];
+        }
+        if (!codeToNames[cat.code].includes(cat.name)) {
+          codeToNames[cat.code].push(cat.name);
+        }
+      });
+      
+      // Populate category code dropdown
+      categoryCodeSelect.innerHTML = '<option value="">-- Select Category Code --</option>';
+      codeSet.forEach(code => {
+        const option = document.createElement('option');
+        option.value = code;
+        const firstName = codeToNames[code][0];
+        option.textContent = `${code} (${firstName})`;
+        option.dataset.names = JSON.stringify(codeToNames[code]);
+        categoryCodeSelect.appendChild(option);
+      });
+    });
+
+  // When category code is selected, show category name dropdown
+  categoryCodeSelect.addEventListener('change', function() {
+    if (this.value) {
+      const names = JSON.parse(this.options[this.selectedIndex].dataset.names || '[]');
+      categorySelect.innerHTML = '<option value="">-- Select Category Name --</option>';
+      names.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        categorySelect.appendChild(option);
+      });
+      categoryGroup.style.display = '';
+      categorySelect.disabled = false;
+      equipmentGroup.style.display = 'none';
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      categorySelect.value = '';
+      equipmentSelect.value = '';
+      quantityInput.value = '';
+    } else {
+      categoryGroup.style.display = 'none';
+      equipmentGroup.style.display = 'none';
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      categorySelect.value = '';
+      equipmentSelect.value = '';
+      quantityInput.value = '';
+    }
+  });
+
+  // When category name is selected, fetch equipment for that category and show dropdown
+  categorySelect.addEventListener('change', function() {
+    if (this.value) {
+      const categoryCode = categoryCodeSelect.value;
+      // Fetch equipment by category code
+      fetch(`{{ url_for("admin.api_equipment_by_category", category_code="") }}${categoryCode}`)
+        .then(res => res.json())
+        .then(data => {
+          equipmentSelect.innerHTML = '<option value="">-- Select Equipment Name --</option>';
+          data.forEach(eq => {
+            const option = document.createElement('option');
+            option.value = eq.name;
+            option.textContent = `${eq.name} (Stock: ${eq.quantity})`;
+            equipmentSelect.appendChild(option);
+          });
+        });
+      equipmentGroup.style.display = '';
+      equipmentSelect.disabled = false;
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      equipmentSelect.value = '';
+      quantityInput.value = '';
+    } else {
+      equipmentGroup.style.display = 'none';
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      equipmentSelect.value = '';
+      quantityInput.value = '';
+    }
+  });
+
+  // When equipment name is selected, show quantity input
+  equipmentSelect.addEventListener('change', function() {
+    if (this.value) {
+      quantityGroup.style.display = '';
+      quantityInput.disabled = false;
+      quantityInput.value = '';
+      submitGroup.style.display = 'none';
+    } else {
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      quantityInput.value = '';
+    }
+  });
+
+  // When quantity is entered, show submit button
+  quantityInput.addEventListener('input', function() {
+    if (this.value && parseInt(this.value) > 0) {
+      submitGroup.style.display = '';
+    } else {
+      submitGroup.style.display = 'none';
+    }
+  });
+});
+</script>
 
   <h4 class="text-center mb-3">Bulk Upload Equipment (CSV)</h4>
   <form method="POST" action="{{ url_for('admin.equipment_upload') }}" enctype="multipart/form-data" class="border p-3 rounded mb-4 bg-white">
@@ -39,56 +187,188 @@
     <small class="text-muted d-block mt-2">After previewing, use the "Confirm and Import" button on the preview page to commit the changes.</small>
   </form>
 
-  <h4 class="text-center mb-3">Existing Equipment Inventory</h4>
-  <table class="table table-bordered table-striped align-middle small">
+  <hr class="my-5">
+
+  <h4 class="text-center mb-3">Received Equipment</h4>
+  <div class="mb-3 d-flex justify-content-end">
+    <a href="{{ url_for('admin.equipment_export_csv') }}" class="btn btn-outline-secondary">Export CSV</a>
+  </div>
+  
+  <style>
+/* Table container for scroll on smaller screens */
+#receivedEquipmentTableWrapper {
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+
+/* Main table styling */
+#receivedEquipmentTable {
+  width: auto;
+  border-collapse: collapse;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Table header */
+#receivedEquipmentTable thead th {
+  border-color: #343a40 !important;
+  background: linear-gradient(90deg, #343a40, #495057);
+  color: #fff !important;
+  font-weight: 600;
+  text-align: center;
+  padding: 0.75rem !important;
+}
+
+/* Table body cells */
+#receivedEquipmentTable td {
+  border: 1px solid #dee2e6 !important;
+  padding: 0.6rem !important;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Alternate row colors */
+#receivedEquipmentTable tbody tr:nth-child(odd) {
+  background-color: #f8f9fa;
+}
+
+#receivedEquipmentTable tbody tr:nth-child(even) {
+  background-color: #ffffff;
+}
+
+/* Hover effect */
+#receivedEquipmentTable tbody tr:hover {
+  background-color: #e2e6ea;
+  transition: background-color 0.2s ease-in-out;
+}
+
+/* Responsive: wrap table in scrollable container */
+@media (max-width: 768px) {
+  #receivedEquipmentTable th,
+  #receivedEquipmentTable td {
+    font-size: 0.85rem;
+    padding: 0.5rem !important;
+  }
+}
+
+/* Rounded first and last header cells for better aesthetics */
+#receivedEquipmentTable thead th:first-child {
+  border-top-left-radius: 8px;
+}
+#receivedEquipmentTable thead th:last-child {
+  border-top-right-radius: 8px;
+}
+
+/* Footer row styling if needed */
+#receivedEquipmentTable tfoot td {
+  font-weight: 600;
+  background-color: #f1f3f5;
+  text-align: center;
+}
+
+/* Optional: smooth text wrapping for long equipment names */
+#receivedEquipmentTable td {
+  word-break: break-word;
+}
+</style>
+
+
+  <table class="table table-bordered table-striped align-middle small" id="receivedEquipmentTable">
     <thead class="table-dark">
       <tr>
-        <th>#</th>
         <th>Category Code</th>
-        <th>Category</th>
-        <th>Name</th>
-        <th>Quantity</th>
-        <th>Condition</th>
-        <th>Date Received</th>
-        <th>Status</th>
+        <th>Category Name</th>
         <th>Actions</th>
       </tr>
     </thead>
     <tbody>
-      {% for item in equipment %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td>{{ item.category_code }}</td>
-        <td>{{ item.category }}</td>
-        <td>{{ item.name }}</td>
-        <td>{{ item.quantity }}</td>
-        <td>{{ item.condition }}</td>
-        <td>{{ item.date_received.strftime('%Y-%m-%d') }}</td>
-          <td>
-            {% if item.is_active %}
-              <span class="badge bg-success">Active</span>
-            {% else %}
-              <span class="badge bg-secondary">Disabled</span>
-            {% endif %}
-          </td>
-          <td>
-            <a href="{{ url_for('admin.equipment_edit', equipment_id=item.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
-            <form method="post" action="{{ url_for('admin.equipment_toggle', equipment_id=item.id) }}" style="display:inline">
-              <button type="submit" class="btn btn-sm {% if item.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
-                {% if item.is_active %}Disable{% else %}Enable{% endif %}
-              </button>
-            </form>
-            <form method="post" action="{{ url_for('admin.equipment_delete', equipment_id=item.id) }}" style="display:inline" onsubmit="return confirm('Delete this equipment? This cannot be undone.');">
-              <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-            </form>
-          </td>
-      </tr>
+      {% if equipment %}
+        {% set grouped = equipment|groupby('category_code') %}
+        {% for code, items in grouped %}
+          {# Build details list for this group to JSONify into data-items #}
+          {% set details = [] %}
+          {% for it in items %}
+            {% set _ = details.append({'name': it.name, 'quantity': it.quantity, 'date_received': (it.date_received.strftime('%Y-%m-%d') if it.date_received else '')}) %}
+          {% endfor %}
+          <tr>
+            <td><strong>{{ code }}</strong></td>
+            <td><strong>{{ items[0].category }}</strong></td>
+            <td>
+              <button type="button" class="btn btn-sm btn-outline-primary view-group-btn" data-items='{{ details|tojson }}'>View</button>
+            </td>
+          </tr>
+        {% endfor %}
       {% else %}
         <tr>
-          <td colspan="9" class="text-center text-muted">No equipment found.</td>
+          <td colspan="3" class="text-center text-muted">No equipment received yet.</td>
         </tr>
-      {% endfor %}
+      {% endif %}
     </tbody>
   </table>
+
+  <!-- Group Details Modal -->
+  <div class="modal fade" id="groupDetailsModal" tabindex="-1" aria-labelledby="groupDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="groupDetailsModalLabel">Category Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle" id="groupDetailsTable">
+              <thead>
+                <tr>
+                  <th>Equipment Name</th>
+                  <th>Quantity</th>
+                  <th>Date Received</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle"></i> Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const modalEl = document.getElementById('groupDetailsModal');
+  if (!modalEl) return;
+  const groupModal = new bootstrap.Modal(modalEl);
+  const tableBody = document.querySelector('#groupDetailsTable tbody');
+
+  document.querySelectorAll('.view-group-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const itemsJson = this.getAttribute('data-items') || '[]';
+      let items = [];
+      try { items = JSON.parse(itemsJson); } catch(e) { items = []; }
+      // Clear table
+      tableBody.innerHTML = '';
+      if (items.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="3" class="text-center text-muted">No items found.</td>';
+        tableBody.appendChild(tr);
+      } else {
+        items.forEach(it => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${it.name}</td><td>${it.quantity}</td><td>${it.date_received || 'N/A'}</td>`;
+          tableBody.appendChild(tr);
+        });
+      }
+      groupModal.show();
+    });
+  });
+});
+</script>
 {% endblock %}

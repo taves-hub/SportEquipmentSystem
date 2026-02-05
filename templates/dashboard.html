@@ -1,77 +1,90 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="container py-5">
-  <h2 class="text-center mb-4">Admin Dashboard</h2>
-  <div class="row text-center">
-    <div class="col-md-4">
-      <div class="card shadow-sm p-3 summary">
-        <h5>Total Equipment</h5>
-        <h2>{{ total_equipment }}</h2>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card shadow-sm p-3 summary">
-        <h5>Items Issued</h5>
-        <h2>{{ total_issued }}</h2>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card shadow-sm p-3 summary">
-        <h5>Students Cleared</h5>
-        <h2>{{ total_cleared }}</h2>
-      </div>
-    </div>
-  </div>
-  
-  <div class="row mt-4">
-    <div class="col-12">
-      <div class="card border-danger shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <h5 class="card-title text-danger">Due Equipment Alerts</h5>
-              <p class="mb-0">{{ due_count or 0 }} items due for return (due date today or earlier)</p>
-            </div>
-            <div>
-              <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#dueDetails" aria-expanded="false" aria-controls="dueDetails">Show Details</button>
-            </div>
-          </div>
+<div class="container-fluid p-2 dashboard-compact">
+  <h2 class="text-center mb-2">Admin Dashboard</h2>
 
-          <div class="collapse mt-3" id="dueDetails">
-            {% if all_due_items %}
-            <div class="table-responsive">
-              <table class="table table-sm table-striped small">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Recipient ID</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for item in all_due_items %}
-                    <tr>
-                      <td>{{ loop.index }}</td>
-                      <td>{{ item.recipient_id }}</td>
-                      <td>{{ item.recipient_name }}</td>
-                      <td>{{ item.recipient_email or '—' }}</td>
-                      <td class="text-end">
-                        <a href="{{ url_for('admin.clearance_due_details', recipient_id=item.recipient_id) }}" class="btn btn-sm btn-outline-primary">View</a>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-            {% else %}
-              <p class="text-muted">No due items found.</p>
-            {% endif %}
-          </div>
+  <!-- Inventory Overview Section -->
+  <div class="mb-2">
+    <h4 class="mb-1"><i class="bi bi-box-seam"></i> Inventory Overview</h4>
+    <div class="row text-center g-1">
+      <div class="col-md-6">
+        <div class="card shadow-sm p-2 summary border-top-primary">
+          <h5 class="text-muted">Total Equipment</h5>
+          <h2 class="text-primary">{{ total_equipment }}</h2>
+          <small class="text-muted">items in inventory</small>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card shadow-sm p-2 summary border-top-success">
+          <h5 class="text-muted">Total Equipment Distributed</h5>
+          <h2 class="text-success">{{ total_distributed_quantity }}</h2>
+          <small class="text-muted">items to satellite campuses</small>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Campus Distribution Section -->
+  <div class="mb-2">
+    <h4 class="mb-1"><i class="bi bi-send"></i> Campus Distribution</h4>
+    <div class="row text-center g-1">
+      <div class="col-md-6">
+        <div class="card shadow-sm p-2 summary border-top-info">
+          <h5 class="text-muted">Satellite Campuses</h5>
+          <h2 class="text-info">{{ total_satellite_campuses }}</h2>
+          <small class="text-muted">active campuses</small>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card shadow-sm p-2 summary border-top-accent">
+          <h5 class="text-muted">Distribution Records</h5>
+          <h2 style="color: var(--accent);">{{ total_distributions_count }}</h2>
+          <small class="text-muted">equipment distributed</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Management Section -->
+  <div class="mb-2">
+    <h4 class="mb-1"><i class="bi bi-people"></i> User Management</h4>
+    <div class="row text-center g-1">
+      <div class="col-md-12">
+        <a href="{{ url_for('admin.user_management') }}" class="card shadow-sm p-2 summary border-top" style="border-top-color: var(--uon-green) !important; text-decoration: none; color: inherit; transition: all 0.3s ease;">
+          <h5 class="text-muted mb-1">Manage Storekeepers</h5>
+          <p class="mb-0"><i class="bi bi-arrow-right" style="color: var(--uon-green);"></i> View pending approvals and manage user accounts</p>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clearance & Risk Section -->
+  <div class="mb-2">
+    <h4 class="mb-1"><i class="bi bi-exclamation-triangle"></i> Clearance & Risk</h4>
+    <div class="row text-center g-1">
+      <div class="col-md-4">
+        <div class="card shadow-sm p-2 summary border-top-warning {% if returned_damaged > 0 %}risk-alert risk-pulse{% else %}risk-success{% endif %}">
+          <h5 class="text-muted">Returned Damaged</h5>
+          <h2 class="{% if returned_damaged > 0 %}text-warning{% else %}text-success{% endif %}">{{ returned_damaged }}</h2>
+          <small class="text-muted">damaged items</small>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card shadow-sm p-2 summary border-top-danger {% if returned_lost > 0 %}risk-alert risk-pulse{% else %}risk-success{% endif %}">
+          <h5 class="text-muted">Lost Items</h5>
+          <h2 class="{% if returned_lost > 0 %}text-danger{% else %}text-success{% endif %}">{{ returned_lost }}</h2>
+          <small class="text-muted">items not returned</small>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card shadow-sm p-2 summary border-top-secondary">
+          <h5 class="text-muted">Students Cleared</h5>
+          <h2 class="text-secondary">{{ total_cleared }}</h2>
+          <small class="text-muted">clearance completed</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

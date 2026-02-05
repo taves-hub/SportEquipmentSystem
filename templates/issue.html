@@ -47,7 +47,7 @@
       <label for="equipment_id" class="form-label">Select Equipment</label>
       <select name="equipment_id" id="equipment_id" class="form-select" required>
         {% for eq in equipment %}
-          <option value="{{ eq.id }}">{{ eq.category }} ({{ eq.name }}) - Available: {{ eq.quantity }}</option>
+          <option value="{{ eq.id }}">{{ eq.name }} - Available: {{ eq.available }} (Distributed: {{ eq.distributed }}, Already Issued: {{ eq.issued }})</option>
         {% endfor %}
       </select>
     </div>
@@ -59,10 +59,10 @@
       <!-- Serial number fields will be added here dynamically -->
     </div>
     <div class="mb-3">
-      <label for="expected_return" class="form-label">Due Date <span class="text-danger">*</span></label>
-      <input type="date" name="expected_return" id="expected_return" class="form-control" required>
+      <label for="expected_return" class="form-label">Due Date <span class="text-muted">(optional)</span></label>
+      <input type="date" name="expected_return" id="expected_return" class="form-control">
     </div>
-    <button type="submit" class="btn btn-primary w-100">Issue Equipment</button>
+    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-circle"></i> Issue Equipment</button>
   </form>
 </div>
 <script>
@@ -186,4 +186,78 @@
     }
   })();
 </script>
+
+{% if show_unreturned_modal %}
+<div class="modal fade" id="unreturnedModal" tabindex="-1" aria-labelledby="unreturnedModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+
+      <div class="modal-header bg-warning-subtle">
+        <h5 class="modal-title fw-bold" id="unreturnedModalLabel">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+          Equipment Already Issued
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p class="mb-2">
+          This <strong>student/staff already has issued equipment</strong> that has not been returned.
+        </p>
+
+        <div class="mb-2">
+          <strong>Name:</strong> {{ student_name }}<br>
+          <strong>Reg/Payroll No:</strong> {{ student_id }}
+        </div>
+
+        <div class="mb-2">
+          <strong>Currently Issued Equipment:</strong>
+          <ul class="mb-0">
+            {% for item in unreturned_items %}
+              <li>
+                {{ item.equipment.name }}
+                {% if item.serials %}
+                  ({{ item.serials | join(', ') }})
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <p class="mt-3 text-muted" style="font-size:0.9rem;">
+          Confirm only if you are authorized to issue additional equipment.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+          Cancel Issue
+        </button>
+
+        <form method="post" action="{{ url_for('storekeeper.issue') }}">
+          {% for key, values in original_form.items() %}
+            {% for value in values %}
+              <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endfor %}
+          {% endfor %}
+          <button type="submit" class="btn btn-danger">
+            Confirm & Continue
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const modal = new bootstrap.Modal(document.getElementById('unreturnedModal'), {
+      backdrop: 'static',
+      keyboard: false
+    });
+    modal.show();
+  });
+</script>
+{% endif %}
 {% endblock %}

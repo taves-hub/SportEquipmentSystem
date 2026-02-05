@@ -10,7 +10,7 @@
 </style>
 <div class="container py-5">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
     <h3 class="text-primary mb-0">Issued Items Report</h3>
     <div style="width: 85px;"></div><!-- Spacer for alignment -->
   </div>
@@ -23,7 +23,7 @@
           <option value="{{ eq.id }}" {% if selected_equipment|string == eq.id|string %}selected{% endif %}>{{ eq.name }} ({{ eq.category }})</option>
           {% endfor %}
         </select>
-        <button class="btn btn-primary" type="submit">Filter</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Filter</button>
       </form>
     </div>
     <div class="col-md-6 d-flex justify-content-end align-items-center">
@@ -55,9 +55,9 @@
       {% for issue in issued_items %}
       <tr>
       <td>{{ issue.staff_payroll or issue.student_id }}</td>
-      <td>{{ issue.staff_name or issue.student_name }}</td>
-      <td>{{ (issue.staff_email or issue.student_email) or '—' }}</td>
-      <td>{{ issue.student_phone or '—' }}</td>
+      <td>{{ (issue.staff.name if issue.staff else issue.student.name if issue.student else None) or '—' }}</td>
+      <td>{{ (issue.staff.email if issue.staff else issue.student.email if issue.student else None) or '—' }}</td>
+      <td>{{ issue.student.phone if issue.student else '—' }}</td>
       <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
         <td>{{ issue.equipment.category if issue.equipment else '' }}</td>
         <td>{{ issue.quantity }}</td>

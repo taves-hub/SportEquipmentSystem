@@ -13,6 +13,25 @@ class Admin(UserMixin, db.Model):
         # return a prefixed id so user_loader can distinguish Admin vs StoreKeeper
         return f"admin-{self.id}"
 
+class Student(db.Model):
+    __tablename__ = 'students'
+    id = db.Column(db.String(20), primary_key=True)  # Student ID as primary key
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    phone = db.Column(db.String(15), nullable=True)
+    
+    # Relationship to issued equipment
+    issued_items = db.relationship('IssuedEquipment', backref='student', lazy='dynamic')
+
+class Staff(db.Model):
+    __tablename__ = 'staff'
+    payroll_number = db.Column(db.String(20), primary_key=True)  # Payroll number as primary key
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    
+    # Relationship to issued equipment
+    issued_items = db.relationship('IssuedEquipment', backref='staff', lazy='dynamic')
+
 class Equipment(db.Model):
     __tablename__ = 'equipment'
     id = db.Column(db.Integer, primary_key=True)
@@ -43,15 +62,9 @@ class Equipment(db.Model):
 class IssuedEquipment(db.Model):
     __tablename__ = 'issued_equipment'
     id = db.Column(db.Integer, primary_key=True)
-    # Student fields
-    student_id = db.Column(db.String(20), nullable=True)
-    student_name = db.Column(db.String(100), nullable=True)
-    student_email = db.Column(db.String(120), nullable=True)
-    student_phone = db.Column(db.String(15), nullable=True)
-    # Staff fields
-    staff_payroll = db.Column(db.String(20), nullable=True)
-    staff_name = db.Column(db.String(100), nullable=True)
-    staff_email = db.Column(db.String(120), nullable=True)
+    # Foreign keys to student and staff tables
+    student_id = db.Column(db.String(20), db.ForeignKey('students.id'), nullable=True)
+    staff_payroll = db.Column(db.String(20), db.ForeignKey('staff.payroll_number'), nullable=True)
     # Common fields
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'))
     quantity = db.Column(db.Integer, nullable=False)
@@ -79,9 +92,55 @@ class Clearance(db.Model):
 class StoreKeeper(UserMixin, db.Model):
     __tablename__ = 'storekeepers'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
+    payroll_number = db.Column(db.String(20), unique=True, nullable=False)
+    full_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    campus_id = db.Column(db.Integer, db.ForeignKey('satellite_campuses.id'), nullable=False)
+    is_approved = db.Column(db.Boolean, default=False, nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    campus = db.relationship('SatelliteCampus', backref='storekeepers')
 
     def get_id(self):
         return f"storekeeper-{self.id}"
+
+
+class SatelliteCampus(db.Model):
+    __tablename__ = 'satellite_campuses'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    location = db.Column(db.String(200), nullable=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EquipmentCategory(db.Model):
+    __tablename__ = 'equipment_categories'
+    id = db.Column(db.Integer, primary_key=True)
+    category_code = db.Column(db.String(10), nullable=False, unique=True)
+    category_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class CampusDistribution(db.Model):
+    __tablename__ = 'campus_distributions'
+    id = db.Column(db.Integer, primary_key=True)
+    campus_id = db.Column(db.Integer, db.ForeignKey('satellite_campuses.id'), nullable=False)
+    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
+    category_code = db.Column(db.String(10), nullable=False)
+    category_name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    date_distributed = db.Column(db.DateTime, default=datetime.utcnow)
+    distributed_by = db.Column(db.String(120), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    document_path = db.Column(db.String(500), nullable=True)  # Path to uploaded supporting document
+    
+    # Relationships
+    campus = db.relationship('SatelliteCampus', backref='distributions')
+    equipment = db.relationship('Equipment', backref='campus_distributions')

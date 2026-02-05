@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h4 class="mb-4">Manage Satellite Campuses</h4>
+
+  <div class="row">
+    <div class="col-md-5">
+      <div class="card p-3 shadow-sm">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">Campus Name</label>
+            <input name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Code</label>
+            <input name="code" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Location</label>
+            <input name="location" class="form-control">
+          </div>
+          <div class="d-grid gap-2">
+            <button class="btn btn-primary"><i class="bi bi-plus-circle"></i> Add Campus</button>
+            <a href="{{ url_for('admin.distribute_to_campus') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Distribution</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="col-md-7">
+      <div class="card shadow-sm p-3">
+        <h6 class="mb-3">Existing Campuses</h6>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr><th>#</th><th>Name</th><th>Code</th><th>Location</th><th>Active</th></tr>
+            </thead>
+            <tbody>
+              {% for c in campuses %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ c.name }}</td>
+                  <td>{{ c.code }}</td>
+                  <td>{{ c.location or '—' }}</td>
+                  <td>{{ 'Yes' if c.is_active else 'No' }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="text-muted text-center">No campuses found.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

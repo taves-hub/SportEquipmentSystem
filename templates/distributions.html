@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <h4 class="text-center mb-3">Campus Distributions</h4>
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <div class="d-flex flex-column flex-sm-row gap-2 align-items-start align-items-sm-center justify-content-between mb-3">
+        <div class="d-flex gap-2 w-100">
+          <input id="distributionSearch" type="search" class="form-control form-control-sm" placeholder="Search by campus, equipment or category code...">
+        </div>
+        <div class="text-muted small">Total: <strong>{{ distributions|length }}</strong></div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0 small" id="distributionTable">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Satellite Campus</th>
+              <th>Equipment</th>
+              <th>Category Code</th>
+              <th>Category Name</th>
+              <th class="text-center">Quantity</th>
+              <th class="d-none d-sm-table-cell">Date Distributed</th>
+              <th class="d-none d-md-table-cell">Distributed By</th>
+              <th class="d-none d-md-table-cell">Notes</th>
+              <th class="text-center">Document</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if distributions %}
+              {% for dist in distributions %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td class="fw-semibold">{{ dist.campus.name if dist.campus else '—' }}</td>
+                <td>{{ dist.equipment.name if dist.equipment else '—' }}</td>
+                <td class="text-muted small">{{ dist.category_code or '—' }}</td>
+                <td>{{ dist.category_name or '—' }}</td>
+                <td class="text-center">{{ dist.quantity }}</td>
+                <td class="d-none d-sm-table-cell">{{ dist.date_distributed.strftime('%Y-%m-%d') if dist.date_distributed else '—' }}</td>
+                <td class="d-none d-md-table-cell">{{ dist.distributed_by or '—' }}</td>
+                <td class="d-none d-md-table-cell text-truncate" style="max-width:200px">{{ dist.notes or '—' }}</td>
+                <td class="text-center">
+                  {% if dist.document_path %}
+                    <a href="{{ url_for('admin.download_distribution_document', distribution_id=dist.id) }}" 
+                       class="btn btn-sm btn-outline-primary" 
+                       title="Download document">
+                      <i class="fas fa-download"></i> Download
+                    </a>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="10" class="text-center text-muted">No distributions yet.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<style>
+  /* Improve row hover and condensed look */
+  .table-hover tbody tr:hover { background-color: #f4f7fb; }
+  .table-sm td, .table-sm th { padding: .5rem .6rem; }
+  .card .form-control-sm { max-width: 420px; }
+  @media (max-width: 576px) {
+    .card .form-control-sm { max-width: 100%; }
+  }
+
+  /* Table styling for distributions */
+  #distributionTable th {
+    border: 1px solid #495057 !important;
+  }
+  
+  #distributionTable td {
+    border: 1px solid #dee2e6 !important;
+  }
+</style>
+
+<script>
+  // Simple client-side search/filter for distributions table
+  document.addEventListener('DOMContentLoaded', function(){
+    var searchInput = document.getElementById('distributionSearch');
+    if(searchInput){
+      searchInput.addEventListener('input', function(){
+        var q = searchInput.value.trim().toLowerCase();
+        var rows = document.querySelectorAll('#distributionTable tbody tr');
+        rows.forEach(function(r){
+          var text = r.textContent.toLowerCase();
+          r.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    }
+  });
+</script>
+
+{% endblock %}

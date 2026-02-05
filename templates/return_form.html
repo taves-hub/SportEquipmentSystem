@@ -1,125 +1,189 @@
+
 {% extends 'base.html' %}
 {% block content %}
 <div class="container py-5">
   <h4 class="text-center mb-3">Return Equipment</h4>
   <div class="card p-4">
-    {% if issue.student_name %}
-      <p><strong>Student:</strong> {{ issue.student_name }}</p>
-      {% if issue.student_id %}
-        <p><strong>Student ID:</strong> {{ issue.student_id }}</p>
+    <div class="card-header bg-light">
+      <h5 class="card-title mb-0">Return Equipment</h5>
+    </div>
+    <div class="card-body">
+      {% if issue.student %}
+        <div class="mb-3">
+          <p><strong>Student:</strong> {{ issue.student.name }}</p>
+          {% if issue.student_id %}
+            <p><strong>Student ID:</strong> {{ issue.student_id }}</p>
+          {% endif %}
+        </div>
+      {% elif issue.staff %}
+        <div class="mb-3">
+          <p><strong>Staff:</strong> {{ issue.staff.name }}</p>
+          {% if issue.staff_payroll %}
+            <p><strong>Payroll:</strong> {{ issue.staff_payroll }}</p>
+          {% endif %}
+        </div>
       {% endif %}
-    {% elif issue.staff_name %}
-      <p><strong>Staff:</strong> {{ issue.staff_name }}</p>
-      {% if issue.staff_payroll %}
-        <p><strong>Payroll:</strong> {{ issue.staff_payroll }}</p>
-      {% endif %}
-    {% else %}
-      <p><strong>Person:</strong> —</p>
-    {% endif %}
-    <p><strong>Equipment:</strong> {{ issue.equipment.name if issue.equipment else issue.equipment_id }}</p>
-    <p><strong>Qty issued:</strong> {{ issue.quantity }}</p>
-    {% if serials %}
-      <p><strong>Serial Numbers:</strong></p>
-      <div class="mb-3">
-        {% for serial in serials %}
-          <div class="d-flex align-items-center mb-2">
-            <div class="form-check me-3">
-              <input class="form-check-input" type="checkbox" name="returned_serials" value="{{ serial }}" id="serial_{{ loop.index }}" checked>
-              <label class="form-check-label" for="serial_{{ loop.index }}">
-                {{ serial }}
-              </label>
-            </div>
-            <div class="flex-grow-1">
-              <select name="condition_{{ serial }}" class="form-select" required>
-                <option value="">-- Select condition --</option>
-                <option value="Good">Good</option>
-                <option value="Damaged">Damaged</option>
-                <option value="Lost">Lost</option>
-              </select>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-      <small class="text-muted">Check the serial numbers of the items being returned and select their condition.</small>
-    {% else %}
+
       <form method="post" id="returnForm">
         <div class="mb-3">
-          <label for="condition" class="form-label">Return condition</label>
-          <select name="condition" id="condition" class="form-select" required>
-            <option value="">-- Select condition --</option>
-            <option value="Good">Good</option>
-            <option value="Damaged">Damaged</option>
-            <option value="Lost">Lost</option>
-          </select>
+          <h6>Select items to return and specify condition:</h6>
+          <small class="text-muted d-block mb-2">Check each item and select its return condition.</small>
         </div>
-        <button class="btn btn-success" type="submit">Confirm Return</button>
-        {% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}
-          <a href="{{ url_for('storekeeper.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
-        {% else %}
-          <a href="{{ url_for('admin.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
-        {% endif %}
-      </form>
-    {% endif %}
 
-    {% if serials %}
-      <form method="post" id="returnForm">
-        <button class="btn btn-success" type="submit">Confirm Return</button>
-        {% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}
-          <a href="{{ url_for('storekeeper.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
-        {% else %}
-          <a href="{{ url_for('admin.issued_equipment') }}" class="btn btn-secondary ms-2">Cancel</a>
-        {% endif %}
+        <div class="table-responsive">
+          <table class="table table-hover table-sm align-middle mb-3 small">
+            <thead class="table-dark">
+              <tr>
+                <th width="50px"><input type="checkbox" id="select-all" class="form-check-input"></th>
+                <th>Equipment</th>
+                <th>Serial Number</th>
+                <th>Return Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if serials and serials|length > 0 %}
+                {% for serial in serials %}
+                  <tr>
+                    <td>
+                      <input type="checkbox" name="returned_serials" value="{{ serial }}" class="form-check-input item-checkbox">
+                    </td>
+                    <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
+                    <td>{{ serial }}</td>
+                    <td>
+                      <select name="condition_{{ serial }}" class="form-select form-select-sm condition-select" disabled>
+                        <option value="">-- Select --</option>
+                        <option value="Good">Good</option>
+                        <option value="Damaged">Damaged</option>
+                        <option value="Lost">Lost</option>
+                      </select>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td>
+                    <input type="checkbox" name="returned_serials" value="all" class="form-check-input item-checkbox">
+                  </td>
+                  <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
+                  <td>—</td>
+                  <td>
+                    <select name="condition_all" class="form-select form-select-sm condition-select" disabled>
+                      <option value="">-- Select --</option>
+                      <option value="Good">Good</option>
+                      <option value="Damaged">Damaged</option>
+                      <option value="Lost">Lost</option>
+                    </select>
+                  </td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div>
+            <button type="submit" class="btn btn-success" id="confirm-return" disabled><i class="bi bi-check-circle"></i> Confirm Return</button>
+            <a href="{{ url_for('storekeeper.issued_equipment') }}" class="btn btn-secondary ms-2"><i class="bi bi-x-circle"></i> Cancel</a>
+          </div>
+          <div class="text-muted small">
+            Total items: {% if serials and serials|length > 0 %}{{ serials|length }}{% else %}1{% endif %}
+          </div>
+        </div>
       </form>
-    {% endif %}
+    </div>
   </div>
 </div>
 
 <script>
-  // Validate that all condition selects have a value before form submission
+  // Select all checkbox functionality and condition selection management
   document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+    const conditionSelects = document.querySelectorAll('.condition-select');
+    const confirmButton = document.getElementById('confirm-return');
     const returnForm = document.getElementById('returnForm');
+
+    // Function to update condition select states and button
+    function updateUI() {
+      const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+      const checkedCount = checkedBoxes.length;
+
+      // Enable/disable condition selects based on checkbox state
+      itemCheckboxes.forEach((checkbox, index) => {
+        const conditionSelect = conditionSelects[index];
+        if (checkbox.checked) {
+          conditionSelect.disabled = false;
+          conditionSelect.required = true;
+        } else {
+          conditionSelect.disabled = true;
+          conditionSelect.required = false;
+          conditionSelect.value = '';
+        }
+      });
+
+      // Update select all checkbox state
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked = checkedCount === itemCheckboxes.length && itemCheckboxes.length > 0;
+        selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < itemCheckboxes.length;
+      }
+
+      // Update confirm button
+      confirmButton.disabled = checkedCount === 0;
+      confirmButton.textContent = checkedCount === 0 ? 'Confirm Return' : `Confirm Return (${checkedCount})`;
+    }
+
+    // Select all functionality
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', function() {
+        itemCheckboxes.forEach(checkbox => {
+          checkbox.checked = selectAllCheckbox.checked;
+        });
+        updateUI();
+      });
+    }
+
+    // Individual checkbox changes
+    itemCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', updateUI);
+    });
+
+    // Form validation before submission
     if (returnForm) {
       returnForm.addEventListener('submit', function(e) {
-        // Check for serial number condition selects
-        const conditionSelects = document.querySelectorAll('select[name^="condition_"]');
-        if (conditionSelects.length > 0) {
-          // Serial items - check each condition select
-          let allSelected = true;
-          let missingConditions = [];
+        const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+        let validationPassed = true;
+        let missingConditions = [];
 
-          conditionSelects.forEach(function(select) {
-            if (!select.value || select.value === '') {
-              allSelected = false;
-              // Extract serial number from the name attribute (condition_SERIALNUMBER)
-              const serialMatch = select.name.match(/^condition_(.+)$/);
-              if (serialMatch) {
-                missingConditions.push(serialMatch[1]);
-              }
-            }
-          });
+        checkedBoxes.forEach((checkbox, index) => {
+          // Find the corresponding condition select
+          const row = checkbox.closest('tr');
+          const conditionSelect = row.querySelector('.condition-select');
 
-          if (!allSelected) {
-            e.preventDefault();
-            alert('Please select a return condition for all serial numbers: ' + missingConditions.join(', '));
-            // Focus on the first empty select
-            const firstEmpty = document.querySelector('select[name^="condition_"]:not([value]):not([value=""])');
-            if (firstEmpty) {
-              firstEmpty.focus();
-            }
-            return false;
+          if (!conditionSelect.value || conditionSelect.value === '') {
+            validationPassed = false;
+            // Get equipment name and serial for error message
+            const equipmentName = row.cells[1].textContent.trim();
+            const serialNumber = row.cells[2].textContent.trim();
+            const itemDesc = serialNumber !== '—' ? `${equipmentName} (${serialNumber})` : equipmentName;
+            missingConditions.push(itemDesc);
           }
-        } else {
-          // Non-serial item - check the single condition select
-          const singleCondition = document.getElementById('condition');
-          if (singleCondition && (!singleCondition.value || singleCondition.value === '')) {
-            e.preventDefault();
-            alert('Please select a return condition.');
-            singleCondition.focus();
-            return false;
+        });
+
+        if (!validationPassed) {
+          e.preventDefault();
+          alert('Please select a return condition for all selected items:\n\n' + missingConditions.join('\n'));
+          // Focus on the first empty condition select
+          const firstEmpty = document.querySelector('.item-checkbox:checked').closest('tr').querySelector('.condition-select:not([value]):not([value=""])');
+          if (firstEmpty) {
+            firstEmpty.focus();
           }
+          return false;
         }
       });
     }
+
+    // Initialize UI on load
+    updateUI();
   });
 </script>
 

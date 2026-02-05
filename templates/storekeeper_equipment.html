@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container py-5">
-  <h3 class="text-center mb-4 text-success">Existing Equipment Inventory</h3>
+  <h3 class="text-center mb-4 text-success">Equipment Inventory (By Campus Distribution)</h3>
   
   <div class="table-responsive">
     <table class="table table-bordered table-striped align-middle small">
@@ -9,11 +9,10 @@
         <tr>
           <th>#</th>
           <th>Category</th>
-          <th>Name</th>
-          <th>Category Code</th>
-          <th>Quantity</th>
-          <th>Condition</th>
-          <th>Date Received</th>
+          <th>Equipment Name</th>
+          <th class="text-center">Distributed Qty</th>
+          <th class="text-center">Issued Qty</th>
+          <th class="text-center">Available Qty</th>
           <th>Status</th>
         </tr>
       </thead>
@@ -21,14 +20,17 @@
         {% for item in equipment %}
         <tr>
           <td>{{ loop.index }}</td>
-          <td>{{ item.category }}</td>
-          <td>{{ item.name }}</td>
-          <td>{{ item.category_code }}</td>
-          <td>{{ item.quantity }}</td>
-          <td>{{ item.condition }}</td>
-          <td>{{ item.date_received.strftime('%Y-%m-%d') }}</td>
+          <td>{{ item.equipment.category }}</td>
+          <td>{{ item.equipment.name }}</td>
+          <td class="text-center fw-semibold">{{ item.distributed_quantity }}</td>
+          <td class="text-center">{{ item.issued_quantity }}</td>
+          <td class="text-center">
+            <span class="{% if item.available_quantity <= 5 %}text-danger fw-bold{% elif item.available_quantity <= 10 %}text-warning{% endif %}">
+              {{ item.available_quantity }}
+            </span>
+          </td>
           <td>
-            {% if item.is_active %}
+            {% if item.equipment.is_active %}
               <span class="badge bg-success">Active</span>
             {% else %}
               <span class="badge bg-secondary">Disabled</span>
@@ -37,11 +39,17 @@
         </tr>
         {% else %}
           <tr>
-            <td colspan="8" class="text-center text-muted">No equipment found.</td>
+            <td colspan="7" class="text-center text-muted">No equipment distributed to your campus yet.</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div class="alert alert-info mt-3">
+    <strong>Note:</strong> You can only issue equipment that has been distributed to your campus by the admin. 
+    The "Distributed Qty" column shows the total amount allocated to you. 
+    "Available Qty" shows how much remains after your issued items.
   </div>
 </div>
 {% endblock %}

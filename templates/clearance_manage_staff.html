@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.clearance_report', student_id=staff_payroll) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+    <h4 class="mb-0">Staff Clearance Management</h4>
+    <div style="width: 85px;"></div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <p class="mb-1"><strong>Payroll Number:</strong> {{ staff_payroll }}</p>
+      {% set staff_name = items[0].staff.name if items|length > 0 and items[0].staff else '' %}
+      {% if staff_name %}
+        <p class="mb-1"><strong>Staff Name:</strong> {{ staff_name }}</p>
+      {% endif %}
+      <p class="mb-0"><strong>Items found:</strong> {{ items|length }}</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped align-middle small">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>Equipment</th>
+          <th>Qty</th>
+          <th>Date Issued</th>
+          <th>Status</th>
+          <th>Return Condition</th>
+          <th>Date Returned</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ it.equipment.name if it.equipment else it.equipment_id }}</td>
+          <td>{{ it.quantity }}</td>
+          <td>{{ it.date_issued.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {% if it.status == 'Returned' %}
+              <span class="badge bg-success">Returned</span>
+            {% else %}
+              <span class="badge bg-warning">Issued</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if it.return_conditions %}
+              {% set conditions = it.return_conditions %}
+              {% if conditions == '{"replaced": true}' %}
+                <span class="text-info">Replaced</span>
+              {% else %}
+                {% set cond_dict = conditions | from_json %}
+                {% if cond_dict and cond_dict.replaced %}
+                  <span class="text-info">Replaced</span>
+                {% elif cond_dict %}
+                  {% for key, cond in cond_dict.items() %}
+                    {% if cond.lower() == 'good' %}
+                      <span class="text-success">{{ cond }}</span>
+                    {% elif cond.lower() == 'damaged' %}
+                      <div>
+                        <span class="text-warning">{{ cond }}</span>
+                        <div class="form-check mt-1">
+                          <input class="form-check-input" type="checkbox" name="replaced_{{ it.id }}" id="replaced_{{ it.id }}">
+                          <label class="form-check-label small" for="replaced_{{ it.id }}">Replaced</label>
+                        </div>
+                      </div>
+                    {% elif cond.lower() == 'lost' %}
+                      <div>
+                        <span class="text-danger">{{ cond }}</span>
+                        <div class="form-check mt-1">
+                          <input class="form-check-input" type="checkbox" name="replaced_{{ it.id }}" id="replaced_{{ it.id }}">
+                          <label class="form-check-label small" for="replaced_{{ it.id }}">Replaced</label>
+                        </div>
+                      </div>
+                    {% else %}
+                      <span class="text-muted">{{ cond }}</span>
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  <span class="text-muted">{{ conditions }}</span>
+                {% endif %}
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if it.date_returned %}
+              {{ it.date_returned.strftime('%Y-%m-%d') }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted">No issued items found for this staff member.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" class="mt-4">
+    <button type="submit" class="btn btn-success">Proceed to Clear Staff Member</button>
+    <a href="{{ url_for('admin.clearance_report', student_id=staff_payroll) }}" class="btn btn-outline-secondary">Cancel</a>
+  </form>
+</div>
+{% endblock %}

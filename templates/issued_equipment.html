@@ -1,80 +1,95 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container py-5">
-  <h4 class="text-center mb-3">Issued Equipment</h4>
+  <h2 class="text-center mb-4">Issued Equipment</h2>
+  
   <div class="card shadow-sm">
     <div class="card-body">
       <div class="d-flex flex-column flex-sm-row gap-2 align-items-start align-items-sm-center justify-content-between mb-3">
         <div class="d-flex gap-2 w-100">
-          <input id="issuedSearch" type="search" class="form-control form-control-sm" placeholder="Search by student, equipment or ID">
+          <input id="issuedSearch" type="search" class="form-control form-control-sm" placeholder="Search by recipient, equipment, or status...">
         </div>
         <div class="text-muted small">Total: <strong>{{ issued|length }}</strong></div>
       </div>
 
       <div class="table-responsive">
-        <table class="table table-hover table-sm align-middle mb-0 small">
-    <thead class="table-dark">
-      <tr>
-        <th>#</th>
-        <th>Recipient Name</th>
-        <th>Recipient ID</th>
-        <th class="d-none d-md-table-cell">Email</th>
-        <th class="d-none d-md-table-cell">Phone</th>
-        <th>Equipment</th>
-        <th class="text-center">Qty</th>
-        <th class="d-none d-sm-table-cell">Date Issued</th>
-        <th class="d-none d-md-table-cell">Issued By</th>
-        <th class="d-none d-sm-table-cell">Due Date</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for issue in issued %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td class="fw-semibold">{{ issue.student_name or issue.staff_name or '—' }}</td>
-        <td class="text-muted small">{{ issue.student_id or issue.staff_payroll or '—' }}</td>
-        <td class="d-none d-md-table-cell text-truncate" style="max-width:160px">{{ issue.student_email or issue.staff_email or '—' }}</td>
-        <td class="d-none d-md-table-cell">{{ issue.student_phone or '—' }}</td>
-        <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
-        <td class="text-center">{{ issue.quantity }}</td>
-        <td class="d-none d-sm-table-cell">{{ issue.date_issued.strftime('%Y-%m-%d') }}</td>
-        <td class="d-none d-md-table-cell">{{ issue.issued_by or '—' }}</td>
-        <td class="d-none d-sm-table-cell">{{ issue.expected_return.strftime('%Y-%m-%d') if issue.expected_return else '—' }}</td>
-        <td>
-          {% if issue.status == 'Returned' %}
-            <span class="badge bg-success">Returned</span>
-            {% if issue.return_condition %}
-              <div class="small mt-1">
-                {% if issue.return_condition == 'Good' %}
-                  <span class="text-success">Condition: Good</span>
-                {% elif issue.return_condition == 'Damaged' %}
-                  <span class="text-warning">Condition: Damaged</span>
-                {% elif issue.return_condition == 'Lost' %}
-                  <span class="text-danger">Condition: Lost</span>
-                {% endif %}
-              </div>
-              {% if issue.date_returned %}
-                <div class="small text-muted">
-                  {{ issue.date_returned.strftime('%Y-%m-%d') }}
-                </div>
-              {% endif %}
+        <table class="table table-hover table-sm align-middle mb-0 small" id="issuedEquipmentTable">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Recipient Type</th>
+              <th>Recipient ID</th>
+              <th>Recipient Name</th>
+              <th>Equipment</th>
+              <th class="text-center">Quantity</th>
+              <th class="d-none d-sm-table-cell">Date Issued</th>
+              <th class="d-none d-md-table-cell">Expected Return</th>
+              <th class="text-center">Status</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if issued %}
+              {% for item in issued %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>
+                  {% if item.student_id and item.student_id != '' %}
+                    <span class="badge bg-info">Student</span>
+                  {% else %}
+                    <span class="badge bg-warning">Staff</span>
+                  {% endif %}
+                </td>
+                <td class="fw-semibold">{{ item.student_id or item.staff_payroll or '—' }}</td>
+                <td>
+                  {% if item.student %}
+                    {{ item.student.name }}
+                  {% elif item.staff %}
+                    {{ item.staff.name }}
+                  {% else %}
+                    {{ item.equipment_display if item.equipment_display else '—' }}
+                  {% endif %}
+                </td>
+                <td>{{ item.equipment.name if item.equipment else '—' }}</td>
+                <td class="text-center">{{ item.quantity }}</td>
+                <td class="d-none d-sm-table-cell">{{ item.date_issued.strftime('%Y-%m-%d') if item.date_issued else '—' }}</td>
+                <td class="d-none d-md-table-cell">
+                  {% if item.expected_return %}
+                    {{ item.expected_return.strftime('%Y-%m-%d') }}
+                    {% if item.status == 'Issued' and item.expected_return.date() <= now.date() %}
+                      <span class="badge bg-danger ms-1">OVERDUE</span>
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if item.status == 'Issued' %}
+                    <span class="badge bg-warning text-dark">Issued</span>
+                  {% else %}
+                    <span class="badge bg-success">Returned</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if item.status == 'Issued' %}
+                    <a href="{{ url_for('storekeeper.return_item', issue_id=item.id) }}" class="btn btn-sm btn-outline-primary" title="Return equipment">Return</a>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="10" class="text-center text-muted">No issued equipment yet.</td>
+              </tr>
             {% endif %}
-          {% else %}
-            <span class="badge bg-warning">Issued</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="11" class="text-center text-muted">No equipment issued yet.</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
+</div>
 
 <style>
   /* Improve row hover and condensed look */
@@ -84,21 +99,31 @@
   @media (max-width: 576px) {
     .card .form-control-sm { max-width: 100%; }
   }
+
+  /* Table styling */
+  #issuedEquipmentTable th {
+    border: 1px solid #495057 !important;
+  }
+  
+  #issuedEquipmentTable td {
+    border: 1px solid #dee2e6 !important;
+  }
 </style>
 
 <script>
   // Simple client-side search/filter for issued equipment table
   document.addEventListener('DOMContentLoaded', function(){
-    var input = document.getElementById('issuedSearch');
-    if(!input) return;
-    input.addEventListener('input', function(){
-      var q = input.value.trim().toLowerCase();
-      var rows = document.querySelectorAll('table tbody tr');
-      rows.forEach(function(r){
-        var text = r.textContent.toLowerCase();
-        r.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+    var searchInput = document.getElementById('issuedSearch');
+    if(searchInput){
+      searchInput.addEventListener('input', function(){
+        var q = searchInput.value.trim().toLowerCase();
+        var rows = document.querySelectorAll('#issuedEquipmentTable tbody tr');
+        rows.forEach(function(r){
+          var text = r.textContent.toLowerCase();
+          r.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
       });
-    });
+    }
   });
 </script>
 

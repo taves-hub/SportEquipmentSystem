@@ -59,9 +59,9 @@
                     <tr>
                       <td>{{ loop.index }}</td>
                       <td>{{ item.staff_payroll or item.student_id }}</td>
-                      <td>{{ item.staff_name or item.student_name }}</td>
-                      <td>{{ (item.staff_email or item.student_email) or '—' }}</td>
-                      <td>{{ item.student_phone or '—' }}</td>
+                      <td>{{ (item.staff.name if item.staff else item.student.name if item.student else None) or '—' }}</td>
+                      <td>{{ (item.staff.email if item.staff else item.student.email if item.student else None) or '—' }}</td>
+                      <td>{{ item.student.phone if item.student else '—' }}</td>
                       <td>{{ item.equipment.name if item.equipment else item.equipment_id }}</td>
                       <td>{{ item.quantity }}</td>
                       <td>{{ item.expected_return.strftime('%Y-%m-%d') if item.expected_return else '' }}</td>

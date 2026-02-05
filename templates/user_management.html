@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">
+      <i class="bi bi-people-fill" style="color: var(--uon-green);"></i> User Management
+    </h1>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+  </div>
+
+  <!-- Pending Approvals Section -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light border-top border-warning" style="border-top-width: 3px !important;">
+      <h5 class="mb-0 text-warning">
+        <i class="bi bi-exclamation-circle"></i> Pending Approvals
+        <span class="badge bg-warning text-dark ms-2">{{ pending_storekeepers|length }}</span>
+      </h5>
+    </div>
+    <div class="card-body">
+      {% if pending_storekeepers %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr class="table-light">
+                <th style="width: 20%;">Payroll Number</th>
+                <th style="width: 20%;">Full Name</th>
+                <th style="width: 25%;">Email</th>
+                <th style="width: 15%;">Campus</th>
+                <th style="width: 20%;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for storekeeper in pending_storekeepers %}
+                <tr>
+                  <td>
+                    <strong>{{ storekeeper.payroll_number }}</strong>
+                  </td>
+                  <td>
+                    {{ storekeeper.full_name }}
+                  </td>
+                  <td>
+                    <i class="bi bi-envelope"></i> {{ storekeeper.email }}
+                  </td>
+                  <td>
+                    <small class="text-muted">{{ storekeeper.campus.name if storekeeper.campus else 'N/A' }}</small>
+                  </td>
+                  <td>
+                    <form method="POST" style="display: inline;">
+                      <button type="submit" formaction="{{ url_for('admin.approve_storekeeper', user_id=storekeeper.id) }}" class="btn btn-sm btn-success">
+                        <i class="bi bi-check-circle"></i> Approve
+                      </button>
+                      <button type="submit" formaction="{{ url_for('admin.reject_storekeeper', user_id=storekeeper.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure? This user will be permanently removed.');">
+                        <i class="bi bi-x-circle"></i> Reject
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-info-circle"></i> No pending approvals at this time.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Approved Storekeepers Section -->
+  <div class="card shadow-sm">
+    <div class="card-header bg-light border-top" style="border-top-width: 3px !important; border-top-color: var(--uon-green) !important;">
+      <h5 class="mb-0" style="color: var(--uon-green);">
+        <i class="bi bi-check-circle-fill"></i> Approved Storekeepers
+        <span class="badge ms-2" style="background-color: var(--uon-green);">{{ approved_storekeepers|length }}</span>
+      </h5>
+    </div>
+    <div class="card-body">
+      {% if approved_storekeepers %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr class="table-light">
+                <th style="width: 25%;">Username</th>
+                <th style="width: 35%;">Email</th>
+                <th style="width: 20%;">Approved On</th>
+                <th style="width: 20%;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for storekeeper in approved_storekeepers %}
+                <tr>
+                  <td>
+                    <strong>{{ storekeeper.username }}</strong>
+                    <br>
+                    <small class="text-success"><i class="bi bi-shield-check"></i> Active</small>
+                  </td>
+                  <td>
+                    <i class="bi bi-envelope"></i> {{ storekeeper.email }}
+                  </td>
+                  <td>
+                    <small class="text-muted">
+                      {{ storekeeper.approved_at.strftime('%d %b %Y %H:%M') if storekeeper.approved_at else 'N/A' }}
+                    </small>
+                  </td>
+                  <td>
+                    <form method="POST" style="display: inline;">
+                      <button type="submit" formaction="{{ url_for('admin.deactivate_storekeeper', user_id=storekeeper.id) }}" class="btn btn-sm btn-warning" onclick="return confirm('Deactivate this storekeeper?');">
+                        <i class="bi bi-pause-circle"></i> Deactivate
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-info-circle"></i> No approved storekeepers yet.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Info Section -->
+  <div class="alert alert-light border mt-4">
+    <h6 class="mb-2">
+      <i class="bi bi-info-circle"></i> How User Management Works
+    </h6>
+    <ul class="mb-0 small">
+      <li><strong>Pending Approvals:</strong> New storekeeper registrations appear here awaiting admin approval.</li>
+      <li><strong>Approve:</strong> Click "Approve" to activate a storekeeper account. They can then log in to the system.</li>
+      <li><strong>Reject:</strong> Click "Reject" to remove a pending registration permanently.</li>
+      <li><strong>Deactivate:</strong> Click "Deactivate" to revoke access from an approved storekeeper without deleting their account.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

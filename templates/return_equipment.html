@@ -5,76 +5,111 @@
   <h4 class="text-center mb-3">Return Equipment</h4>
   <div class="card p-4">
     <div class="mb-4">
-      <form method="get" action="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.return_equipment') }}{% else %}{{ url_for('admin.return_equipment') }}{% endif %}">
-        <div class="input-group">
-          <input type="text" name="recipient_id" class="form-control" placeholder="Enter Student ID or Staff Payroll Number..." value="{{ recipient_id or '' }}" required>
-          <button type="submit" class="btn btn-primary">Search</button>
-        </div>
-      </form>
+      {% if current_user.get_id().startswith('storekeeper-') %}
+        <form method="get" action="{{ url_for('storekeeper.return_equipment') }}" class="w-100">
+          <label class="form-label">Select Issue</label>
+          <div class="input-group">
+            <input type="text" name="issue_id" class="form-control" placeholder="Issue Reference / Issue ID (search or enter)" value="{{ request.args.get('issue_id','') }}">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+          </div>
+          <small class="form-text text-muted">Select the issue record to process returns.</small>
+        </form>
+      {% else %}
+        <form method="get" action="{{ url_for('admin.return_equipment') }}" class="w-50">
+          <div class="input-group input-group-sm">
+            <input type="text" name="recipient_id" class="form-control form-control-sm" placeholder="Enter Student ID or Staff Payroll..." value="{{ recipient_id or '' }}" required>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Search</button>
+          </div>
+        </form>
+      {% endif %}
       {% if recipient_id %}
         <div class="mt-2">
-          <a href="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.return_equipment') }}{% else %}{{ url_for('admin.return_equipment') }}{% endif %}" class="btn btn-outline-secondary btn-sm">Clear Search</a>
+          <a href="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.return_equipment') }}{% else %}{{ url_for('admin.return_equipment') }}{% endif %}" class="btn btn-secondary btn-sm"><i class="bi bi-x-circle"></i> Clear Search</a>
         </div>
       {% endif %}
 
-    {% if recipient_id and recipient_name %}
+      {% if recipient_id and recipient_name %}
       <div class="alert alert-info">
         <strong>{{ recipient_type }}:</strong> {{ recipient_name }} (ID: {{ recipient_id }})
       </div>
     {% endif %}
-
     {% if display_items %}
-      <form method="post" id="returnForm">
-        <div class="mb-3">
-          <h5>Issued Equipment</h5>
-          <small class="text-muted">Select the equipment items to return and specify their condition.</small>
+      <div class="card mt-4">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">Return Equipment</h5>
         </div>
+        <div class="card-body">
+          {% set first_item = display_items[0].issue %}
+          {% if first_item.student %}
+            <div class="mb-3">
+              <p><strong>Student:</strong> {{ first_item.student.name }}</p>
+              {% if first_item.student_id %}
+                <p><strong>Student ID:</strong> {{ first_item.student_id }}</p>
+              {% endif %}
+            </div>
+          {% elif first_item.staff %}
+            <div class="mb-3">
+              <p><strong>Staff:</strong> {{ first_item.staff.name }}</p>
+              {% if first_item.staff_payroll %}
+                <p><strong>Payroll:</strong> {{ first_item.staff_payroll }}</p>
+              {% endif %}
+            </div>
+          {% endif %}
 
-        <div class="table-responsive">
-          <table class="table table-hover table-sm align-middle mb-3 small">
-            <thead class="table-dark">
-              <tr>
-                <th width="50px"><input type="checkbox" id="select-all" class="form-check-input"></th>
-                <th>Equipment</th>
-                <th>Serial Number</th>
-                <th class="d-none d-md-table-cell">Date Issued</th>
-                <th class="d-none d-md-table-cell">Due Date</th>
-                <th>Return Condition</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item in display_items %}
-                <tr>
-                  <td>
-                    <input type="checkbox" name="selected_serials" value="{{ item.issue.id }}:{{ item.serial }}" class="form-check-input item-checkbox">
-                  </td>
-                  <td>{{ item.equipment_name }}</td>
-                  <td>{{ item.serial or '—' }}</td>
-                  <td class="d-none d-md-table-cell">{{ item.issue.date_issued.strftime('%Y-%m-%d') }}</td>
-                  <td class="d-none d-md-table-cell">{{ item.issue.expected_return.strftime('%Y-%m-%d') if item.issue.expected_return else '—' }}</td>
-                  <td>
-                    <select name="condition_{{ item.issue.id }}_{{ item.serial }}" class="form-select form-select-sm condition-select" disabled>
-                      <option value="">-- Select --</option>
-                      <option value="Good">Good</option>
-                      <option value="Damaged">Damaged</option>
-                      <option value="Lost">Lost</option>
-                    </select>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+          <form method="post" id="returnForm">
+            <div class="mb-3">
+              <h6>Select items to return and specify condition:</h6>
+              <small class="text-muted d-block mb-2">Check each item and select its return condition.</small>
+            </div>
 
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <button type="submit" class="btn btn-success" id="confirm-return" disabled>Confirm Return</button>
-          </div>
-          <div class="text-muted small">
-            Total items: {{ display_items|length }}
-          </div>
+            <div class="table-responsive">
+              <table class="table table-hover table-sm align-middle mb-3 small">
+                <thead class="table-dark">
+                  <tr>
+                    <th width="50px"><input type="checkbox" id="select-all" class="form-check-input"></th>
+                    <th>Equipment</th>
+                    <th>Serial Number</th>
+                    <th>Return Condition</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in display_items %}
+                    <tr>
+                      <td>
+                        <input type="checkbox" name="selected_serials" value="{{ item.issue.id }}:{{ item.serial }}" class="form-check-input item-checkbox">
+                      </td>
+                      <td>{{ item.equipment_name }}</td>
+                      <td>{{ item.serial or '—' }}</td>
+                      <td>
+                        <select name="condition_{{ item.issue.id }}_{{ item.serial }}" class="form-select form-select-sm condition-select" disabled>
+                          <option value="">-- Select --</option>
+                          <option value="Good">Good</option>
+                          <option value="Damaged">Damaged</option>
+                          <option value="Lost">Lost</option>
+                        </select>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div>
+                <button type="submit" class="btn btn-success" id="confirm-return" disabled><i class="bi bi-check-circle"></i> Confirm Return</button>
+                <a href="{{ url_for('storekeeper.return_equipment') }}" class="btn btn-secondary ms-2"><i class="bi bi-x-circle"></i> Clear</a>
+              </div>
+              <div class="text-muted small">
+                Total items: {{ display_items|length }}
+              </div>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
+    {% elif request.args.get('issue_id') %}
+      <div class="alert alert-warning">
+        No issued equipment found for Issue ID: {{ request.args.get('issue_id') }}
+      </div>
     {% elif recipient_id %}
       <div class="alert alert-warning">
         No issued equipment found for recipient ID: {{ recipient_id }}
@@ -141,7 +176,8 @@
     });
 
     // Form validation before submission
-    returnForm.addEventListener('submit', function(e) {
+    if (returnForm) {
+      returnForm.addEventListener('submit', function(e) {
       const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
       let validationPassed = true;
       let missingConditions = [];
@@ -171,7 +207,8 @@
         }
         return false;
       }
-    });
+      });
+    }
 
   });
 </script>

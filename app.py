@@ -52,6 +52,17 @@ def create_app(test_config=None):
         from datetime import datetime
         return {'now': datetime.now()}
 
+    # Custom Jinja2 filters
+    @app.template_filter('from_json')
+    def from_json_filter(value):
+        import json
+        if value and isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return []
+
     # Add root route
     @app.route('/')
     def index():

@@ -2,7 +2,7 @@
 {% block content %}
 <div class="container py-5">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <a href="{{ url_for('admin.equipment') }}" class="btn btn-secondary">&larr; Back</a>
+    <a href="{{ url_for('admin.equipment') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
     <h3 class="mb-0">Preview Upload</h3>
     <div></div>
   </div>
@@ -51,8 +51,8 @@
     </table>
 
     <div class="d-flex gap-2">
-      <button type="submit" name="action" value="confirm" class="btn btn-success">Confirm and Import</button>
-      <a href="{{ url_for('admin.equipment') }}" class="btn btn-secondary">Cancel</a>
+      <button type="submit" name="action" value="confirm" class="btn btn-success"><i class="bi bi-check-circle"></i> Confirm and Import</button>
+      <a href="{{ url_for('admin.equipment') }}" class="btn btn-secondary"><i class="bi bi-x-circle"></i> Cancel</a>
     </div>
   </form>
 </div>

@@ -1,0 +1,479 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  .card-container {
+    transition: all 0.3s ease;
+  }
+  .card-container.hidden {
+    display: none;
+  }
+  .cards-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  /* Form card styling */
+  .form-card .card {
+    border: 2px solid #6c757d;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    width: auto;
+    
+  }
+  .form-card .card-body {
+    padding: 2rem;
+  }
+
+  /* Addon card styling */
+  .addon-card .card {
+    border: 2px solid #6c757d;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e9ecef 0%, #ffffff 100%);
+    height: 100%;
+  }
+  .addon-card .card-body {
+    padding: 1.5rem;
+  }
+  .addon-card .card-title {
+    color: #495057;
+    font-weight: 600;
+    border-bottom: 2px solid #6c757d;
+    padding-bottom: 0.75rem;
+  }
+
+  .cards-grid.form-selected {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 60vh;
+  }
+  .cards-grid.form-selected .form-card {
+    width: 100%;
+    max-width: 500px;
+  }
+  .cards-grid.form-selected .addon-card {
+    display: none;
+  }
+  @media (max-width: 768px) {
+    .cards-grid {
+      grid-template-columns: 1fr;
+    }
+    .cards-grid.form-selected .form-card {
+      max-width: 100%;
+    }
+  }
+</style>
+<div class="container py-5">
+  <h4 class="text-center mb-4">Distribute Equipment to Satellite Campus</h4>
+  
+  <div class="cards-grid" id="cardsGrid">
+    <div class="card-container form-card" id="formCard">
+      <div class="card p-4 shadow-sm h-100">
+        <form method="post" id="distributionForm" enctype="multipart/form-data">
+          
+          <!-- Step 1: Select Satellite Campus -->
+          <div class="mb-3">
+            <label for="campus_id" class="form-label">Satellite Campus <span class="text-danger">*</span></label>
+            <select name="campus_id" id="campus_id" class="form-select" required>
+              <option value="">-- Select Campus --</option>
+              {% for campus in campuses %}
+                <option value="{{ campus.id }}">{{ campus.name }} ({{ campus.code }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Step 2: Select Category (predefined dropdown with AJAX cascading) -->
+          <div class="mb-3" id="categoryCodeGroup" style="display:none;">
+            <label for="category_code" class="form-label">Category Code <span class="text-danger">*</span></label>
+            <select name="category_code" id="category_code" class="form-select" required>
+              <option value="">-- First select Campus --</option>
+            </select>
+          </div>
+
+          <!-- Step 3: Select Category Name (linked to category code) -->
+          <div class="mb-3" id="categoryNameGroup" style="display:none;">
+            <label for="category_name" class="form-label">Category Name <span class="text-danger">*</span></label>
+            <select name="category_name" id="category_name" class="form-select" required>
+              <option value="">-- Select Category Name --</option>
+            </select>
+            <small class="text-muted">Names for the selected category code.</small>
+          </div>
+
+          <!-- Step 4: Select Equipment (filtered by category) -->
+          <div class="mb-3" id="equipmentGroup" style="display:none;">
+            <label for="equipment_id" class="form-label">Equipment <span class="text-danger">*</span></label>
+            <select name="equipment_id" id="equipment_id" class="form-select" required>
+              <option value="">-- Select Equipment --</option>
+            </select>
+            <small class="text-muted" id="equipmentAvailability"></small>
+          </div>
+
+          <!-- Step 5: Enter Quantity (no serial numbers required) -->
+          <div class="mb-3" id="quantityGroup" style="display:none;">
+            <label for="quantity" class="form-label">Quantity <span class="text-danger">*</span></label>
+            <input type="number" name="quantity" id="quantity" class="form-control" min="1" placeholder="Enter quantity" required>
+            <small class="text-muted">Serial numbers are not recorded at this stage.</small>
+          </div>
+
+          <!-- Step 6: Add Notes (optional) -->
+          <div class="mb-3" id="notesGroup" style="display:none;">
+            <label for="notes" class="form-label">Notes & Comments</label>
+            <textarea name="notes" id="notes" class="form-control" rows="3" placeholder="Add any notes or comments about this distribution (e.g., condition of items, special handling instructions)"></textarea>
+            <small class="text-muted">Optional: Add relevant information to support this distribution.</small>
+          </div>
+
+          <!-- Step 7: Upload Supporting Document (optional) -->
+          <div class="mb-3" id="documentGroup" style="display:none;">
+            <label for="document" class="form-label">Supporting Document</label>
+            <input type="file" name="document" id="document" class="form-control" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+            <small class="text-muted">Optional: Upload a document (PDF, Word, Excel, or image) to support this distribution.</small>
+          </div>
+
+          <div class="d-grid gap-2" id="submitGroup" style="display:none;">
+            <button type="submit" class="btn btn-primary" id="submitBtn"><i class="bi bi-check-circle"></i> Distribute Equipment</button>
+            <button type="button" class="btn btn-secondary" id="cancelBtn"><i class="bi bi-x-circle"></i> Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="card-container addon-card" id="addonCard">
+      <div class="card p-4 shadow-sm h-100">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title mb-3">Add Campus / Equipment</h5>
+          <p class="card-text small text-muted flex-grow-1">Quick links to add a new satellite campus or equipment item before distributing.</p>
+          <div class="d-grid gap-2 mt-auto">
+            <a href="{{ url_for('admin.manage_campuses') }}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Add Campus</a>
+            <button type="button" class="btn btn-primary" id="openAddEquipmentBtn"><i class="bi bi-plus-circle"></i> Add New Equipment</button>
+            <a href="{{ url_for('admin.view_distributions') }}" class="btn btn-secondary"><i class="bi bi-eye"></i> View Distributions</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Equipment Modal -->
+<div class="modal fade" id="addEquipmentModal" tabindex="-1" aria-labelledby="addEquipmentModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('admin.equipment') }}" id="addEquipmentForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addEquipmentModalLabel">Add New Equipment</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="new_category_code" class="form-label">Category Code <span class="text-danger">*</span></label>
+            <input type="text" name="category_code" id="new_category_code" class="form-control" placeholder="e.g. ATH-001" required>
+          </div>
+          <div class="mb-3">
+            <label for="new_category" class="form-label">Category Name</label>
+            <input type="text" name="category" id="new_category" class="form-control" placeholder="e.g. Balls, Protective Gear">
+          </div>
+          <div class="mb-3">
+            <label for="new_name" class="form-label">Equipment Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" id="new_name" class="form-control" placeholder="e.g. Football" required>
+          </div>
+          <div class="mb-3">
+            <label for="new_quantity" class="form-label">Quantity <span class="text-danger">*</span></label>
+            <input type="number" name="quantity" id="new_quantity" class="form-control" min="0" value="0" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle"></i> Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle"></i> Save Equipment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const cardsGrid = document.getElementById('cardsGrid');
+  const formCard = document.getElementById('formCard');
+  const addonCard = document.getElementById('addonCard');
+  const campusSelect = document.getElementById('campus_id');
+  const categoryCodeSelect = document.getElementById('category_code');
+  const categoryNameSelect = document.getElementById('category_name');
+  const equipmentSelect = document.getElementById('equipment_id');
+  const quantityInput = document.getElementById('quantity');
+  const submitBtn = document.getElementById('submitBtn');
+  const categoryCodeGroup = document.getElementById('categoryCodeGroup');
+  const categoryNameGroup = document.getElementById('categoryNameGroup');
+  const equipmentGroup = document.getElementById('equipmentGroup');
+  const quantityGroup = document.getElementById('quantityGroup');
+  const notesGroup = document.getElementById('notesGroup');
+  const documentGroup = document.getElementById('documentGroup');
+  const submitGroup = document.getElementById('submitGroup');
+
+  // Function to expand form card (hide addon card)
+  function expandFormCard() {
+    cardsGrid.classList.add('form-selected');
+  }
+
+  // Function to reset (show both cards)
+  function resetCards() {
+    cardsGrid.classList.remove('form-selected');
+    campusSelect.value = '';
+    categoryCodeSelect.value = '';
+    categoryNameSelect.value = '';
+    equipmentSelect.value = '';
+    quantityInput.value = '';
+    categoryCodeGroup.style.display = 'none';
+    categoryNameGroup.style.display = 'none';
+    equipmentGroup.style.display = 'none';
+    quantityGroup.style.display = 'none';
+    notesGroup.style.display = 'none';
+    documentGroup.style.display = 'none';
+    submitGroup.style.display = 'none';
+  }
+
+  // Hide all except campus on load
+  categoryCodeGroup.style.display = 'none';
+  categoryNameGroup.style.display = 'none';
+  equipmentGroup.style.display = 'none';
+  quantityGroup.style.display = 'none';
+  submitGroup.style.display = 'none';
+
+  // When campus is selected, show category code and expand form
+  campusSelect.addEventListener('change', function() {
+    if (this.value) {
+      expandFormCard();
+      categoryCodeGroup.style.display = '';
+      categoryCodeSelect.disabled = false;
+    } else {
+      categoryCodeGroup.style.display = 'none';
+      categoryNameGroup.style.display = 'none';
+      equipmentGroup.style.display = 'none';
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      categoryCodeSelect.value = '';
+      categoryNameSelect.value = '';
+      equipmentSelect.value = '';
+      quantityInput.value = '';
+    }
+
+    const campusId = this.value;
+    if (campusId) {
+      categoryCodeSelect.disabled = false;
+      // Fetch all categories
+      fetch('{{ url_for("admin.api_categories") }}')
+        .then(res => res.json())
+        .then(data => {
+          categoryCodeSelect.innerHTML = '<option value="">-- Select Category Code --</option>';
+          // Create a map of codes to first matching category name
+          const codeToName = {};
+          data.forEach(cat => {
+            if (!codeToName[cat.code]) {
+              codeToName[cat.code] = cat.name;
+            }
+          });
+          // Get unique codes and display with names in brackets
+          Object.entries(codeToName).forEach(([code, name]) => {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = `${code} (${name})`;
+            categoryCodeSelect.appendChild(option);
+          });
+        });
+    } else {
+      categoryCodeSelect.disabled = true;
+      categoryNameSelect.disabled = true;
+      equipmentSelect.disabled = true;
+      quantityInput.disabled = true;
+      submitBtn.disabled = true;
+      categoryCodeSelect.innerHTML = '<option value="">-- First select Campus --</option>';
+      categoryNameSelect.innerHTML = '<option value="">-- Select Category Name --</option>';
+      equipmentSelect.innerHTML = '<option value="">-- Select Equipment --</option>';
+    }
+  });
+
+  // When category code is selected, show category name
+  categoryCodeSelect.addEventListener('change', function() {
+    const categoryCode = this.value;
+    if (categoryCode) {
+      categoryNameGroup.style.display = '';
+      categoryNameSelect.disabled = false;
+      // Fetch categories for this code
+      fetch('{{ url_for("admin.api_categories") }}')
+        .then(res => res.json())
+        .then(data => {
+          const matching = data.filter(cat => cat.code === categoryCode);
+          categoryNameSelect.innerHTML = '<option value="">-- Select Category Name --</option>';
+          matching.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.name;
+            option.textContent = cat.name;
+            categoryNameSelect.appendChild(option);
+          });
+        });
+    } else {
+      categoryNameGroup.style.display = 'none';
+      equipmentGroup.style.display = 'none';
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      categoryNameSelect.value = '';
+      equipmentSelect.value = '';
+      quantityInput.value = '';
+    }
+  });
+
+  // When category name is selected, show equipment
+  categoryNameSelect.addEventListener('change', function() {
+    const categoryCode = categoryCodeSelect.value;
+    if (categoryCode && this.value) {
+      equipmentGroup.style.display = '';
+      equipmentSelect.disabled = false;
+      // Fetch equipment by category code
+      fetch(`{{ url_for("admin.api_equipment_by_category", category_code="") }}${categoryCode}`)
+        .then(res => res.json())
+        .then(data => {
+          equipmentSelect.innerHTML = '<option value="">-- Select Equipment --</option>';
+          data.forEach(eq => {
+            const option = document.createElement('option');
+            option.value = eq.id;
+            option.textContent = `${eq.name} (Available: ${eq.quantity})`;
+            option.dataset.available = eq.quantity;
+            equipmentSelect.appendChild(option);
+          });
+        });
+    } else {
+      equipmentGroup.style.display = 'none';
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      equipmentSelect.value = '';
+      quantityInput.value = '';
+    }
+  });
+
+  // When equipment is selected, show quantity input and availability
+  equipmentSelect.addEventListener('change', function() {
+    const selected = this.options[this.selectedIndex];
+    if (this.value) {
+      quantityGroup.style.display = '';
+      quantityInput.disabled = false;
+      quantityInput.value = '';
+      quantityInput.max = selected.dataset.available;
+      document.getElementById('equipmentAvailability').textContent = `Available: ${selected.dataset.available} units`;
+      submitGroup.style.display = 'none';
+    } else {
+      quantityGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+      quantityInput.value = '';
+      document.getElementById('equipmentAvailability').textContent = '';
+    }
+  });
+
+  // When quantity is entered, show notes and submit button if valid
+  quantityInput.addEventListener('input', function() {
+    if (this.value && parseInt(this.value) > 0 && parseInt(this.value) <= parseInt(quantityInput.max)) {
+      notesGroup.style.display = '';
+      documentGroup.style.display = '';
+      submitGroup.style.display = '';
+    } else {
+      notesGroup.style.display = 'none';
+      documentGroup.style.display = 'none';
+      submitGroup.style.display = 'none';
+    }
+  });
+
+  // Handle reset button - allow going back to both cards
+  const cancelBtn = document.getElementById('cancelBtn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      resetCards();
+    });
+  }
+
+  // Open Add Equipment modal and prefill category code/name if available
+  const openAddEquipmentBtn = document.getElementById('openAddEquipmentBtn');
+  const addEquipmentModalEl = document.getElementById('addEquipmentModal');
+  if (openAddEquipmentBtn && addEquipmentModalEl) {
+    const addEquipmentModal = new bootstrap.Modal(addEquipmentModalEl);
+    openAddEquipmentBtn.addEventListener('click', function(e) {
+      // Prefill category_code and category name from selected values in the form if present
+      const selectedCode = categoryCodeSelect && categoryCodeSelect.value ? categoryCodeSelect.value : '';
+      const selectedName = categoryNameSelect && categoryNameSelect.value ? categoryNameSelect.value : '';
+      const newCategoryCode = document.getElementById('new_category_code');
+      const newCategory = document.getElementById('new_category');
+      if (newCategoryCode) {
+        newCategoryCode.value = selectedCode;
+      }
+      if (newCategory) {
+        newCategory.value = selectedName;
+      }
+      addEquipmentModal.show();
+    });
+  }
+
+  // Autofill category name when category code is entered in the Add Equipment modal
+  const newCategoryCodeInput = document.getElementById('new_category_code');
+  const newCategoryInput = document.getElementById('new_category');
+  let cachedCategories = null;
+
+  async function loadCategories() {
+    if (cachedCategories) return cachedCategories;
+    try {
+      const res = await fetch('{{ url_for("admin.api_categories") }}');
+      if (!res.ok) return [];
+      const data = await res.json();
+      cachedCategories = data;
+      return data;
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async function autofillCategoryName(code) {
+    if (!code) {
+      if (newCategoryInput) {
+        newCategoryInput.value = '';
+        newCategoryInput.required = true;
+      }
+      return;
+    }
+    const list = await loadCategories();
+    
+    // Normalize code for comparison: handle leading zeros properly
+    // Split on hyphen, convert numeric parts to integers (removes leading zeros), rejoin
+    function normalizeCode(str) {
+      if (!str) return '';
+      const parts = str.trim().split('-');
+      return parts.map(part => {
+        // If part is numeric, convert to int then back to string to remove leading zeros
+        if (/^\d+$/.test(part)) {
+          return String(parseInt(part, 10));
+        }
+        return part;
+      }).join('-').toUpperCase();
+    }
+    
+    const normalizedInput = normalizeCode(code);
+    const found = list.find(c => c.code && normalizeCode(c.code) === normalizedInput);
+    
+    if (found && newCategoryInput) {
+      newCategoryInput.value = found.name || '';
+      newCategoryInput.required = false;
+    }
+    else if (newCategoryInput) {
+      // Code not found -> require a category name to be entered
+      newCategoryInput.value = '';
+      newCategoryInput.required = true;
+    }
+  }
+
+  if (newCategoryCodeInput) {
+    newCategoryCodeInput.addEventListener('blur', function(e) {
+      autofillCategoryName(this.value.trim());
+    });
+    newCategoryCodeInput.addEventListener('change', function(e) {
+      autofillCategoryName(this.value.trim());
+    });
+  }
+});
+</script>
+{% endblock %}

@@ -25,7 +25,7 @@
       </a>
     </div>
     <div class="col-md-3">
-      <a href="{{ url_for('admin.returned_report') }}" style="text-decoration: none;">
+      <a href="{{ url_for('admin.issued_report') }}" style="text-decoration: none;">
         <div class="card text-center shadow-sm h-100">
           <div class="card-body">
             <h6>Returned Items</h6>
@@ -34,7 +34,29 @@
         </div>
       </a>
     </div>
-    <!-- Clearance card removed from reports page per UX change; link moved to navbar -->
+    <div class="col-md-3">
+      <a href="{{ url_for('admin.clearance_report') }}" style="text-decoration: none;">
+        <div class="card text-center shadow-sm h-100">
+          <div class="card-body">
+            <h6>Cleared Clearances</h6>
+            <h3>{{ cleared_students }}</h3>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <a href="{{ url_for('admin.view_distributions') }}" style="text-decoration: none;">
+        <div class="card text-center shadow-sm h-100">
+          <div class="card-body">
+            <h6>Received Equipment</h6>
+            <h3>{{ received_equipment_count }}</h3>
+          </div>
+        </div>
+      </a>
+    </div>
   </div>
 
   <!-- Charts row: Inventory stacked bar, Time-series, Return-condition donut -->

@@ -103,7 +103,7 @@
 
 <div class="container py-4">
   <div class="report-header">
-    <h2>Issued Items Report</h2>
+    <h2>Clearance Report</h2>
     {% if student_id %}
     <div>Recipient ID: <strong>{{ student_id }}</strong></div>
     {% if student_name %}
@@ -118,7 +118,7 @@
     {% if not_returned_items %}
       <table class="table table-sm table-bordered">
         <thead>
-          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Qty</th><th>Date Issued</th><th>Expected Return</th></tr>
+          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Serial Numbers</th><th>Qty</th><th>Date Issued</th><th>Expected Return</th></tr>
         </thead>
         <tbody>
           {% for it in not_returned_items %}
@@ -126,6 +126,16 @@
             <td>{{ loop.index }}</td>
             <td>{{ it.equipment.name if it.equipment else it.equipment_id }}</td>
             <td>{{ it.student_name or it.staff_name or '—' }} ({{ it.student_id or it.staff_payroll or '—' }})</td>
+            <td>
+              {% if it.serial_numbers %}
+                {% set serials = it.serial_numbers | from_json %}
+                {% for serial in serials %}
+                  <span class="badge bg-secondary">{{ serial }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
             <td>{{ it.quantity }}</td>
             <td>{{ it.date_issued.strftime('%Y-%m-%d') }}</td>
             <td>{% if it.expected_return %}{{ it.expected_return.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
@@ -143,7 +153,7 @@
     {% if damaged_items %}
       <table class="table table-sm table-bordered">
         <thead>
-          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Qty</th><th>Date Returned</th></tr>
+          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Serial Numbers</th><th>Qty</th><th>Date Returned</th></tr>
         </thead>
         <tbody>
           {% for it in damaged_items %}
@@ -151,6 +161,16 @@
             <td>{{ loop.index }}</td>
             <td>{{ it.equipment.name if it.equipment else it.equipment_id }}</td>
             <td>{{ it.student_name or it.staff_name or '—' }} ({{ it.student_id or it.staff_payroll or '—' }})</td>
+            <td>
+              {% if it.serial_numbers %}
+                {% set serials = it.serial_numbers | from_json %}
+                {% for serial in serials %}
+                  <span class="badge bg-secondary">{{ serial }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
             <td>{{ it.quantity }}</td>
             <td>{{ it.date_returned.strftime('%Y-%m-%d') if it.date_returned else '-' }}</td>
           </tr>
@@ -167,7 +187,7 @@
     {% if lost_items %}
       <table class="table table-sm table-bordered">
         <thead>
-          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Qty</th><th>Date Issued</th></tr>
+          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Serial Numbers</th><th>Qty</th><th>Date Issued</th></tr>
         </thead>
         <tbody>
           {% for it in lost_items %}
@@ -175,6 +195,16 @@
             <td>{{ loop.index }}</td>
             <td>{{ it.equipment.name if it.equipment else it.equipment_id }}</td>
             <td>{{ it.student_name or it.staff_name or '—' }} ({{ it.student_id or it.staff_payroll or '—' }})</td>
+            <td>
+              {% if it.serial_numbers %}
+                {% set serials = it.serial_numbers | from_json %}
+                {% for serial in serials %}
+                  <span class="badge bg-secondary">{{ serial }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
             <td>{{ it.quantity }}</td>
             <td>{{ it.date_issued.strftime('%Y-%m-%d') }}</td>
           </tr>
@@ -191,7 +221,7 @@
     {% if cleared_items %}
       <table class="table table-sm table-bordered">
         <thead>
-          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Qty</th><th>Date Returned</th></tr>
+          <tr><th>#</th><th>Equipment</th><th>Borrower</th><th>Serial Numbers</th><th>Qty</th><th>Date Returned</th></tr>
         </thead>
         <tbody>
           {% for it in cleared_items %}
@@ -199,6 +229,16 @@
             <td>{{ loop.index }}</td>
             <td>{{ it.equipment.name if it.equipment else it.equipment_id }}</td>
             <td>{{ it.student_name or it.staff_name or '—' }} ({{ it.student_id or it.staff_payroll or '—' }})</td>
+            <td>
+              {% if it.serial_numbers %}
+                {% set serials = it.serial_numbers | from_json %}
+                {% for serial in serials %}
+                  <span class="badge bg-secondary">{{ serial }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
             <td>{{ it.quantity }}</td>
             <td>{{ it.date_returned.strftime('%Y-%m-%d') if it.date_returned else '-' }}</td>
           </tr>
@@ -211,8 +251,8 @@
   </div>
 
   <div class="text-center mt-3 no-print">
-    <a href="{{ url_for('admin.clearance_report_export', student_id=student_id) }}" class="btn btn-outline-secondary me-2">Export CSV</a>
-    <button class="btn btn-primary" onclick="window.print();">Print</button>
+    <a href="{{ url_for('admin.clearance_report_export', student_id=student_id) }}" class="btn btn-secondary me-2"><i class="bi bi-download"></i> Export CSV</a>
+    <button class="btn btn-primary" onclick="window.print();"><i class="bi bi-printer"></i> Print</button>
   </div>
 </div>
 

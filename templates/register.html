@@ -1,0 +1,129 @@
+{% extends 'login_base.html' %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-center min-vh-100 bg-light">
+  <div class="container-fluid">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="card shadow-lg border-0">
+          <div class="card-body p-3">
+            <!-- Logo and Title -->
+            <div class="text-center mb-2">
+              <div class="d-flex align-items-center justify-content-center gap-2 mb-1">
+                <i class="bi bi-person-plus-fill" style="font-size: 1.5rem; color: var(--uon-green);"></i>
+                <h3 class="mb-0" style="color: var(--uon-green); font-weight: 600; font-size: 1.5rem;">Register</h3>
+              </div>
+              <p class="text-muted mb-2" style="font-size: 0.9rem;">Create your storekeeper account</p>
+            </div>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show mb-2 py-1 px-2" role="alert" style="font-size: 0.85rem;">
+                    {{ message }}
+                    <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            <!-- Registration Form -->
+            <form method="POST" action="{{ url_for('auth.register') }}">
+              
+              <!-- Row 1: Payroll Number & Email -->
+              <div class="row mb-2">
+                <div class="col-md-6">
+                  <label for="payroll_number" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Payroll Number</label>
+                  <input type="text" class="form-control form-control-sm" id="payroll_number" name="payroll_number" placeholder="SK001" required>
+                </div>
+                <div class="col-md-6">
+                  <label for="email" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Email</label>
+                  <input type="email" class="form-control form-control-sm" id="email" name="email" placeholder="staff@uon.ac.ke" required>
+                </div>
+              </div>
+
+              <!-- Row 2: Full Name -->
+              <div class="row mb-2">
+                <div class="col-md-12">
+                  <label for="full_name" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Full Name</label>
+                  <input type="text" class="form-control form-control-sm" id="full_name" name="full_name" placeholder="Enter your full name" required>
+                </div>
+              </div>
+
+              <!-- Row 3: Campus -->
+              <div class="row mb-2">
+                <div class="col-md-12">
+                  <label for="campus_id" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Campus</label>
+                  <select class="form-control form-control-sm" id="campus_id" name="campus_id" required>
+                    <option value="">-- Select Campus --</option>
+                    {% for campus in campuses %}
+                      <option value="{{ campus.id }}">{{ campus.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <!-- Row 4: Password & Confirm Password -->
+              <div class="row mb-2">
+                <div class="col-md-6">
+                  <label for="password" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Password</label>
+                  <div class="input-group input-group-sm">
+                    <input type="password" class="form-control" id="password" name="password" placeholder="Password" required minlength="6">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="togglePassword('password')" tabindex="-1">
+                      <i class="bi bi-eye" style="font-size: 0.85rem;"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label for="confirm_password" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Repeat Password</label>
+                  <div class="input-group input-group-sm">
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm" required>
+                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="togglePassword('confirm_password')" tabindex="-1">
+                      <i class="bi bi-eye" style="font-size: 0.85rem;"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Register Button -->
+              <div class="row mb-2">
+                <div class="col-md-12">
+                  <button type="submit" class="btn w-100" style="background-color: var(--uon-green); color: white; font-weight: 600; padding: 0.5rem; font-size: 0.95rem;">
+                    Register
+                  </button>
+                </div>
+              </div>
+
+              <!-- Login Link -->
+              <div class="row mb-0">
+                <div class="col-md-12 text-center">
+                  <small class="text-muted" style="font-size: 0.85rem;">Already have an account? 
+                    <a href="{{ url_for('auth.login') }}" style="color: var(--uon-green); text-decoration: none; font-weight: 600;">Login here</a>
+                  </small>
+                </div>
+              </div>
+            </form>
+
+            <!-- Info Box -->
+            <div class="alert alert-info mt-2 mb-0 py-1 px-2" role="alert" style="font-size: 0.8rem;">
+              <i class="bi bi-info-circle"></i> Account pending admin approval before login.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function togglePassword(fieldId) {
+  const field = document.getElementById(fieldId);
+  const type = field.type === 'password' ? 'text' : 'password';
+  field.type = type;
+}
+</script>
+{% endblock %}
+
+
+

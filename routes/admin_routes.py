@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify, session, abort
 from flask_login import login_required, current_user
 from extensions import db
-from models import Admin, StoreKeeper, Equipment, IssuedEquipment, Clearance
+from models import Admin, StoreKeeper, Equipment, IssuedEquipment, Clearance, Student, Staff, SatelliteCampus, EquipmentCategory, CampusDistribution
 from datetime import datetime, UTC, timedelta
-from Utils.clearance_integration import update_clearance_status
+import uuid
+from Utils.clearance_integration import get_clearance_status
 import csv
 import io
 import re
@@ -36,8 +37,38 @@ def _require_admin():
 @login_required
 def dashboard():
     total_equipment = Equipment.query.count()
-    total_issued = IssuedEquipment.query.filter_by(status='Issued').count()
-    total_cleared = Clearance.query.filter_by(status='Cleared').count()
+    total_satellite_campuses = SatelliteCampus.query.filter_by(is_active=True).count()
+
+    # Calculate cleared students dynamically
+    from Utils.clearance_integration import get_clearance_status
+    students = Student.query.all()
+    total_cleared = sum(1 for student in students if get_clearance_status(student.id) == 'Cleared')
+
+    # Additional overview statistics
+    total_returned = IssuedEquipment.query.filter(IssuedEquipment.status == 'Returned').count()
+    returned_good = IssuedEquipment.query.filter(
+        IssuedEquipment.status == 'Returned',
+        IssuedEquipment.return_conditions == 'Good'
+    ).count()
+
+    # Distribution metrics (satellite campus distributions)
+    total_distributions_count = CampusDistribution.query.count()
+    # Sum of quantities distributed to campuses
+    total_distributed_quantity = db.session.query(func.coalesce(func.sum(CampusDistribution.quantity), 0)).scalar()
+    returned_damaged = IssuedEquipment.query.filter(
+        IssuedEquipment.status == 'Returned',
+        IssuedEquipment.return_conditions == 'Damaged'
+    ).count()
+    returned_lost = IssuedEquipment.query.filter(
+        IssuedEquipment.status == 'Returned',
+        IssuedEquipment.return_conditions == 'Lost'
+    ).count()
+
+    # Total recipients (students + staff)
+    total_students = Student.query.count()
+    total_staff = Staff.query.count()
+    total_recipients = total_students + total_staff
+
     # Find due issued items (due date is today or earlier and still Issued)
     today = datetime.now().date()
     due_items_q = IssuedEquipment.query.filter(
@@ -51,12 +82,33 @@ def dashboard():
     # Build flat list of all due items with recipient details
     all_due_items = []
     for it in due_items:
+        # Get recipient details through relationships
+        if it.student:
+            recipient_id = it.student.id
+            recipient_name = it.student.name
+            recipient_email = it.student.email
+            recipient_phone = it.student.phone
+            recipient_type = 'student'
+        elif it.staff:
+            recipient_id = it.staff.payroll_number
+            recipient_name = it.staff.name
+            recipient_email = it.staff.email
+            recipient_phone = None  # Staff don't have phone in our model
+            recipient_type = 'staff'
+        else:
+            # Fallback for items without proper relationships
+            recipient_id = it.staff_payroll or it.student_id or 'Unknown'
+            recipient_name = 'Unknown'
+            recipient_email = None
+            recipient_phone = None
+            recipient_type = 'unknown'
+            
         all_due_items.append({
-            'recipient_id': it.staff_payroll or it.student_id,
-            'recipient_name': it.staff_name or it.student_name,
-            'recipient_email': it.staff_email or it.student_email,
-            'recipient_phone': it.student_phone,
-            'recipient_type': 'staff' if it.staff_name else 'student',
+            'recipient_id': recipient_id,
+            'recipient_name': recipient_name,
+            'recipient_email': recipient_email,
+            'recipient_phone': recipient_phone,
+            'recipient_type': recipient_type,
             'equipment_name': it.equipment.name if it.equipment else str(it.equipment_id),
             'equipment_id': it.equipment_id,
             'quantity': it.quantity,
@@ -67,10 +119,17 @@ def dashboard():
 
     return render_template('dashboard.html',
                            total_equipment=total_equipment,
-                           total_issued=total_issued,
+                           total_satellite_campuses=total_satellite_campuses,
                            total_cleared=total_cleared,
+                           total_returned=total_returned,
+                           returned_good=returned_good,
+                           returned_damaged=returned_damaged,
+                           returned_lost=returned_lost,
+                           total_recipients=total_recipients,
                            due_count=due_count,
-                           all_due_items=all_due_items)
+                           all_due_items=all_due_items,
+                           total_distributions_count=total_distributions_count,
+                           total_distributed_quantity=total_distributed_quantity)
 
 @admin_bp.route('/equipment', methods=['GET', 'POST'])
 @login_required
@@ -81,31 +140,75 @@ def equipment():
         category_code = request.form['category_code']
         quantity = request.form['quantity']
         
-        # If category_code exists, increment quantity (consistent with bulk upload behavior)
-        existing_code = Equipment.query.filter_by(category_code=category_code.upper()).first()
+        # Prefer updating an existing equipment that matches both category_code and name.
         try:
             qty = int(quantity)
         except Exception:
             qty = 0
 
-        if existing_code:
-            existing_code.quantity = (existing_code.quantity or 0) + qty
-            db.session.add(existing_code)
+        existing_exact = Equipment.query.filter_by(category_code=category_code.upper(), name=name).first()
+        if existing_exact:
+            existing_exact.quantity = (existing_exact.quantity or 0) + qty
+            db.session.add(existing_exact)
             db.session.commit()
-            flash(f'Existing equipment updated. Quantity increased by {qty}.', 'success')
+            flash(f'Existing equipment "{name}" updated. Quantity increased by {qty}.', 'success')
         else:
+            # No exact match; create a new equipment record under this category code
             new_item = Equipment(
                 name=name,
                 category=category,
                 category_code=category_code.upper(),  # Store in uppercase for consistency
-                quantity=qty
+                quantity=qty,
+                serial_number=uuid.uuid4().hex
             )
             db.session.add(new_item)
             db.session.commit()
             flash('Equipment added successfully!', 'success')
         return redirect(url_for('admin.equipment'))
-    all_equipment = Equipment.query.order_by(Equipment.category.asc(), Equipment.name.asc()).all()
+    # Sort by category_code first, then category, then name for proper grouping in template
+    all_equipment = Equipment.query.order_by(Equipment.category_code.asc(), Equipment.category.asc(), Equipment.name.asc()).all()
     return render_template('equipment.html', equipment=all_equipment)
+
+
+@admin_bp.route('/equipment/export-csv')
+@login_required
+def equipment_export_csv():
+    """Export all received equipment as CSV, grouped by category code like the template."""
+    # Sort by category_code first, then category, then name (same as template)
+    all_equipment = Equipment.query.order_by(Equipment.category_code.asc(), Equipment.category.asc(), Equipment.name.asc()).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # Write headers
+    writer.writerow(['Category Code', 'Category Name', 'Equipment Name', 'Quantity', 'Date Received'])
+    
+    # Group equipment by category_code
+    from itertools import groupby
+    for code, group in groupby(all_equipment, key=lambda x: x.category_code):
+        group_list = list(group)
+        for index, item in enumerate(group_list):
+            # Only write category code and name for the first item in each group
+            if index == 0:
+                writer.writerow([
+                    item.category_code,
+                    item.category,
+                    item.name,
+                    item.quantity,
+                    item.date_received.strftime('%Y-%m-%d') if item.date_received else 'N/A'
+                ])
+            else:
+                # For subsequent items in the group, leave category code and name blank
+                writer.writerow([
+                    '',
+                    '',
+                    item.name,
+                    item.quantity,
+                    item.date_received.strftime('%Y-%m-%d') if item.date_received else 'N/A'
+                ])
+    
+    output.seek(0)
+    return Response(output.getvalue(), mimetype='text/csv', 
+                   headers={"Content-Disposition": "attachment;filename=received_equipment.csv"})
 
 
 @admin_bp.route('/equipment/upload', methods=['POST'])
@@ -149,19 +252,19 @@ def equipment_upload():
             category = entry.get('category', '')
             category_code = entry.get('category_code', '')
             qty = int(entry.get('quantity', 0) or 0)
-            # Match existing equipment by BOTH category_code and name so different
-            # equipment names under the same category_code are treated as distinct items.
-            existing = Equipment.query.filter_by(category_code=category_code, name=name).first()
-            if existing:
-                existing.quantity = (existing.quantity or 0) + max(0, qty)
-                db.session.add(existing)
+            # If any equipment with the same category_code exists, update it
+            existing_by_code = Equipment.query.filter_by(category_code=category_code).first()
+            if existing_by_code:
+                existing_by_code.quantity = (existing_by_code.quantity or 0) + max(0, qty)
+                db.session.add(existing_by_code)
                 updated += 1
             else:
                 new_item = Equipment(
                     name=name,
                     category=category or '',
                     category_code=category_code,
-                    quantity=max(0, qty)
+                    quantity=max(0, qty),
+                    serial_number=uuid.uuid4().hex
                 )
                 db.session.add(new_item)
                 created += 1
@@ -377,19 +480,19 @@ def equipment_upload():
         category_code = entry.get('category_code', '')
         qty = int(entry.get('quantity', 0) or 0)
 
-        # Match existing equipment by BOTH category_code and name so different
-        # equipment names under the same category_code are treated as distinct items.
-        existing = Equipment.query.filter_by(category_code=category_code, name=name).first()
-        if existing:
-            existing.quantity = (existing.quantity or 0) + max(0, qty)
-            db.session.add(existing)
+        # If any equipment with the same category_code exists, update it instead of creating new
+        existing_by_code = Equipment.query.filter_by(category_code=category_code).first()
+        if existing_by_code:
+            existing_by_code.quantity = (existing_by_code.quantity or 0) + max(0, qty)
+            db.session.add(existing_by_code)
             updated += 1
         else:
             new_item = Equipment(
                 name=name,
                 category=category or '',
                 category_code=category_code,
-                quantity=max(0, qty)
+                quantity=max(0, qty),
+                serial_number=uuid.uuid4().hex
             )
             db.session.add(new_item)
             created += 1
@@ -547,48 +650,214 @@ def clearance_report():
     issued_items = query.order_by(IssuedEquipment.date_issued.desc()).all()
 
     # Check if this is for a student or staff
-    is_student = any(it.student_id for it in issued_items)
-    is_staff = any(it.staff_payroll for it in issued_items)
+    is_student = any(it.student for it in issued_items)
+    is_staff = any(it.staff for it in issued_items)
 
-    # Auto-evaluate clearance status per student and persist it (only for students)
+    # Calculate clearance status counts directly from database
+    clearance_counts = {'Cleared': 0, 'Pending': 0, 'Overdue': 0, 'Total': 0}
     status_map = {}
-    if is_student and not is_staff:
-        student_ids = sorted({it.student_id for it in issued_items if it.student_id})
-        for sid in student_ids:
-            items_for_student = [it for it in issued_items if it.student_id == sid]
-            # If any outstanding (not returned), pending
-            if any(it.status != 'Returned' for it in items_for_student):
-                new_status = 'Pending'
-            else:
-                # All returned: check for damaged/lost
-                if any(any(c.lower() in ('damaged', 'lost') for c in json.loads(it.return_conditions or '{}').values()) for it in items_for_student):
-                    new_status = 'Pending'
-                else:
-                    new_status = 'Cleared'
+    recipient_info = {}  # Store recipient name and type for display
 
-            status_map[sid] = new_status
+    # Get unique recipient IDs (both students and staff) from the filtered results
+    recipient_ids = set()
+    for it in issued_items:
+        if it.student_id:
+            recipient_ids.add(('student', it.student_id))
+        elif it.staff_payroll:
+            recipient_ids.add(('staff', it.staff_payroll))
 
-            # Persist to Clearance table
+    clearance_counts['Total'] = len(recipient_ids)
+
+    from Utils.clearance_integration import get_clearance_status
+    for recipient_type, recipient_id in recipient_ids:
+        status = get_clearance_status(recipient_id, recipient_type)
+        status_map[recipient_id] = status
+        clearance_counts[status] = clearance_counts.get(status, 0) + 1
+
+        # Build recipient info for display, include issuing storekeeper and campus
+        recipient_name = 'Unknown'
+        issued_by_display = ''
+        campus_name = ''
+
+        # Get representative (most recent) issued record for this recipient
+        rep_issue = IssuedEquipment.query.filter(
+            db.or_(IssuedEquipment.student_id == recipient_id, IssuedEquipment.staff_payroll == recipient_id)
+        ).order_by(IssuedEquipment.date_issued.desc()).first()
+
+        if rep_issue:
+            issued_by_display = rep_issue.issued_by or ''
+            # Try to resolve issued_by to a StoreKeeper (payroll_number)
+            sk = None
             try:
-                clearance = Clearance.query.filter_by(student_id=sid).first()
-                if not clearance:
-                    clearance = Clearance(student_id=sid)
-                    db.session.add(clearance)
-                if clearance.status != new_status:
-                    clearance.status = new_status
-                    clearance.last_updated = datetime.now(UTC)
-                    db.session.add(clearance)
-                    db.session.commit()
+                sk = StoreKeeper.query.filter_by(payroll_number=issued_by_display).first()
             except Exception:
-                db.session.rollback()
+                sk = None
+            if sk:
+                issued_by_display = sk.full_name
+                campus_name = sk.campus.name if sk.campus else ''
+
+        if recipient_type == 'student':
+            student = Student.query.get(recipient_id)
+            if student:
+                recipient_name = student.name
+        else:  # staff
+            staff = Staff.query.get(recipient_id)
+            if staff:
+                recipient_name = staff.name
+
+        recipient_info[recipient_id] = {
+            'name': recipient_name,
+            'type': 'Student' if recipient_type == 'student' else 'Staff',
+            'issued_by': issued_by_display,
+            'campus': campus_name
+        }
 
     return render_template('clearance_report.html',
                            issued_items=issued_items,
                            student_id=recipient_id,
                            is_pdf=False,
                            clearance_status_map=status_map,
+                           clearance_counts=clearance_counts,
+                           recipient_info=recipient_info,
                            is_student=is_student,
                            is_staff=is_staff)
+
+
+@admin_bp.route('/clearance/<path:recipient_id>/items', methods=['GET', 'POST'])
+@login_required
+def clearance_manage_items(recipient_id):
+    """Manage damaged/lost items for clearance: allow admin to mark items as replaced.
+    
+    GET: show damaged/lost returned items for the recipient.
+    POST: mark items as replaced to help clear the recipient.
+    """
+    # Explicit admin-only guard
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+
+    recipient_id = (recipient_id or '').strip()
+    if not recipient_id:
+        flash('Missing recipient identifier.', 'danger')
+        return redirect(url_for('admin.clearance_report'))
+
+    # Get all returned items for this recipient (both student and staff)
+    all_items = IssuedEquipment.query.filter(
+        IssuedEquipment.status == 'Returned',
+        db.or_(
+            IssuedEquipment.student_id == recipient_id,
+            IssuedEquipment.staff_payroll == recipient_id
+        )
+    ).order_by(IssuedEquipment.date_returned.desc()).all()
+
+    # Filter to only damaged/lost items (not marked as replaced)
+    damaged_lost_items = []
+    for item in all_items:
+        if item.return_conditions:
+            try:
+                conditions = json.loads(item.return_conditions)
+                # Skip if already marked as replaced
+                if isinstance(conditions, dict) and conditions.get('replaced'):
+                    continue
+                # Check if any condition is damaged or lost
+                has_damage = False
+                if isinstance(conditions, dict):
+                    for cond in conditions.values():
+                        if isinstance(cond, str) and cond.lower() in ('damaged', 'lost'):
+                            has_damage = True
+                            break
+                elif isinstance(conditions, str) and conditions.lower() in ('damaged', 'lost'):
+                    has_damage = True
+                
+                if has_damage:
+                    damaged_lost_items.append(item)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # Get recipient info
+    recipient_name = 'Unknown'
+    recipient_type = 'Student'
+    student = Student.query.get(recipient_id)
+    if student:
+        recipient_name = student.name
+        recipient_type = 'Student'
+    else:
+        staff = Staff.query.get(recipient_id)
+        if staff:
+            recipient_name = staff.name
+            recipient_type = 'Staff'
+
+    if request.method == 'GET':
+        return render_template('clearance_manage_items.html', 
+                             recipient_id=recipient_id, 
+                             recipient_name=recipient_name,
+                             recipient_type=recipient_type,
+                             items=damaged_lost_items)
+
+    # POST: apply actions to items
+    processed_items = []
+    action_counts = {'replaced': 0, 'repaired': 0, 'waiver': 0}
+    
+    for item in damaged_lost_items:
+        action_key = f'action_{item.id}'
+        action = request.form.get(action_key, '').strip()
+        
+        if not action:
+            continue
+        
+        if action not in ('replaced', 'repaired', 'waiver'):
+            continue
+        
+        try:
+            equipment = db.session.get(Equipment, item.equipment_id)
+        except Exception:
+            equipment = None
+        
+        # For 'replaced' action: adjust equipment counts (reverse damaged/lost increments)
+        # For 'repaired' and 'waiver': keep inventory as is (no adjustment needed)
+        if action == 'replaced' and equipment:
+            conditions = json.loads(item.return_conditions or '{}')
+            for cond in conditions.values():
+                if isinstance(cond, str) and cond.lower() == 'damaged':
+                    equipment.damaged_count = max(0, (equipment.damaged_count or 0) - 1)
+                    equipment.quantity = (equipment.quantity or 0) + 1
+                elif isinstance(cond, str) and cond.lower() == 'lost':
+                    equipment.lost_count = max(0, (equipment.lost_count or 0) - 1)
+                    equipment.quantity = (equipment.quantity or 0) + 1
+            db.session.add(equipment)
+        
+        # Store the action taken in return_conditions
+        item.return_conditions = json.dumps({
+            'action': action,
+            'action_date': datetime.now(UTC).isoformat(),
+            'action_by': current_user.username if current_user else 'System'
+        })
+        db.session.add(item)
+        processed_items.append(str(item.id))
+        action_counts[action] += 1
+
+    if processed_items:
+        try:
+            db.session.commit()
+            message_parts = []
+            if action_counts['replaced'] > 0:
+                message_parts.append(f"{action_counts['replaced']} replaced")
+            if action_counts['repaired'] > 0:
+                message_parts.append(f"{action_counts['repaired']} repaired")
+            if action_counts['waiver'] > 0:
+                message_parts.append(f"{action_counts['waiver']} waiver")
+            
+            flash(f'Actions applied: {", ".join(message_parts)}. Clearance status updated.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash('Error applying actions: ' + str(e), 'danger')
+        return redirect(url_for('admin.clearance_report'))
+    else:
+        # No items were processed
+        if damaged_lost_items:
+            flash('Please select items and choose actions.', 'warning')
+        else:
+            flash('No damaged/lost items found for this recipient.', 'info')
+        return redirect(url_for('admin.clearance_manage_items', recipient_id=recipient_id))
 
 
 @admin_bp.route('/clearance/<path:student_id>/manage', methods=['GET', 'POST'])
@@ -686,6 +955,85 @@ def clearance_manage(student_id):
     return redirect(url_for('admin.clearance_report', student_id=student_id))
 
 
+@admin_bp.route('/clearance/staff/<path:staff_payroll>/manage', methods=['GET', 'POST'])
+@login_required
+def clearance_manage_staff(staff_payroll):
+    """Manage clearance for a specific staff member: allow admin to attempt to clear.
+
+    GET: show issued items and their return conditions.
+    POST: evaluate items and set clearance status.
+    """
+    # Explicit admin-only guard
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+
+    staff_payroll = (staff_payroll or '').strip()
+    if not staff_payroll:
+        flash('Missing staff payroll number.', 'danger')
+        return redirect(url_for('admin.clearance_report'))
+
+    items = IssuedEquipment.query.filter(IssuedEquipment.staff_payroll == staff_payroll).order_by(IssuedEquipment.date_issued.desc()).all()
+
+    if request.method == 'GET':
+        return render_template('clearance_manage_staff.html', staff_payroll=staff_payroll, items=items)
+
+    # POST: attempt to clear
+    # First, handle any replacements submitted for damaged/lost items
+    replaced_ids = []
+    for it in items:
+        form_key = f'replaced_{it.id}'
+        if request.form.get(form_key):
+            try:
+                equipment = db.session.get(Equipment, it.equipment_id)
+            except Exception:
+                equipment = None
+            # Adjust equipment counts: reverse damaged/lost increments and add back to quantity
+            if equipment:
+                conditions = json.loads(it.return_conditions or '{}')
+                for cond in conditions.values():
+                    if cond.lower() == 'damaged':
+                        equipment.damaged_count = max(0, (equipment.damaged_count or 0) - 1)
+                        equipment.quantity = (equipment.quantity or 0) + 1
+                    elif cond.lower() == 'lost':
+                        equipment.lost_count = max(0, (equipment.lost_count or 0) - 1)
+                        equipment.quantity = (equipment.quantity or 0) + 1
+                db.session.add(equipment)
+            # Mark the issue's return condition as Replaced
+            it.return_conditions = json.dumps({'replaced': True})
+            db.session.add(it)
+            replaced_ids.append(str(it.id))
+
+    if replaced_ids:
+        try:
+            db.session.commit()
+            flash('Marked replaced for items: ' + ', '.join(replaced_ids), 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash('Error recording replacements: ' + str(e), 'danger')
+
+    # For staff, we don't store clearance status in the Clearance table
+    # (it's designed for students), so we just validate the criteria
+    if not items:
+        flash('No issued items found. Staff member is cleared.', 'success')
+        return redirect(url_for('admin.clearance_report', student_id=staff_payroll))
+
+    # Check for outstanding issued items
+    outstanding = [it for it in items if it.status != 'Returned']
+    if outstanding:
+        flash('Staff member has outstanding issued items and cannot be cleared.', 'danger')
+        return redirect(url_for('admin.clearance_report', student_id=staff_payroll))
+
+    # All items are returned - check their return conditions
+    bad = [it for it in items if any(c.lower() in ('damaged', 'lost') for c in json.loads(it.return_conditions or '{}').values())]
+    if bad:
+        flash('Some returned items are Damaged or Lost. Clearance remains Pending.', 'warning')
+        return redirect(url_for('admin.clearance_report', student_id=staff_payroll))
+
+    # All returned and all Good
+    flash('Staff member successfully cleared.', 'success')
+    return redirect(url_for('admin.clearance_report', student_id=staff_payroll))
+
+
 @admin_bp.route('/clearance-report/print')
 @login_required
 def clearance_report_print():
@@ -709,10 +1057,34 @@ def clearance_report_print():
     recipient_name = ''
     if issued_items:
         # Use the first matched item's recipient_name as representative
-        recipient_name = issued_items[0].student_name or issued_items[0].staff_name or ''
+        first_item = issued_items[0]
+        if first_item.student:
+            recipient_name = first_item.student.name
+        elif first_item.staff:
+            recipient_name = first_item.staff.name
+
+    # Categorize items for the print template
+    not_returned_items = []
+    damaged_items = []
+    lost_items = []
+    cleared_items = []
+
+    for item in issued_items:
+        if item.status != 'Returned':
+            not_returned_items.append(item)
+        elif item.return_condition == 'Damaged':
+            damaged_items.append(item)
+        elif item.return_condition == 'Lost':
+            lost_items.append(item)
+        elif item.return_condition == 'Good':
+            cleared_items.append(item)
 
     return render_template('clearance_report_print.html',
                            issued_items=issued_items,
+                           not_returned_items=not_returned_items,
+                           damaged_items=damaged_items,
+                           lost_items=lost_items,
+                           cleared_items=cleared_items,
                            student_id=recipient_id,
                            student_name=recipient_name,
                            generated_on=datetime.now())
@@ -743,9 +1115,15 @@ def clearance_report_export():
     writer = csv.writer(si)
     writer.writerow(['Recipient ID', 'Recipient Name', 'Equipment Name', 'Category', 'Quantity', 'Date Issued', 'Status', 'Return Condition', 'Date Returned'])
     for item in issued_items:
+        recipient_id = item.staff_payroll or item.student_id
+        recipient_name = ''
+        if item.student:
+            recipient_name = item.student.name
+        elif item.staff:
+            recipient_name = item.staff.name
         writer.writerow([
-            item.staff_payroll or item.student_id,
-            item.staff_name or item.student_name,
+            recipient_id,
+            recipient_name,
             item.equipment.name if item.equipment else item.equipment_id,
             item.equipment.category if item.equipment else '',
             item.quantity,
@@ -782,11 +1160,12 @@ def clearance_due_details(recipient_id):
     recipient_name = ''
     recipient_type = ''
     if due_items:
-        if due_items[0].student_id == recipient_id:
-            recipient_name = due_items[0].student_name
+        first_item = due_items[0]
+        if first_item.student:
+            recipient_name = first_item.student.name
             recipient_type = 'Student'
-        elif due_items[0].staff_payroll == recipient_id:
-            recipient_name = due_items[0].staff_name
+        elif first_item.staff:
+            recipient_name = first_item.staff.name
             recipient_type = 'Staff'
     
     # Get issuer info
@@ -797,9 +1176,9 @@ def clearance_due_details(recipient_id):
             if admin:
                 issuer_info[item.id] = {'name': admin.username, 'email': admin.email, 'id': admin.id}
             else:
-                storekeeper = StoreKeeper.query.filter_by(username=item.issued_by).first()
+                storekeeper = StoreKeeper.query.filter_by(payroll_number=item.issued_by).first()
                 if storekeeper:
-                    issuer_info[item.id] = {'name': storekeeper.username, 'email': storekeeper.email, 'id': storekeeper.id}
+                    issuer_info[item.id] = {'name': storekeeper.full_name, 'email': storekeeper.email, 'id': storekeeper.id}
                 else:
                     issuer_info[item.id] = {'name': item.issued_by, 'email': '—', 'id': '—'}
         else:
@@ -834,9 +1213,9 @@ def issue():
     # Validate serial number uniqueness across database
     if serial_numbers:
         existing_serials = set()
-        for issue in IssuedEquipment.query.filter(IssuedEquipment.serial_number.isnot(None)):
+        for issue in IssuedEquipment.query.filter(IssuedEquipment.serial_numbers.isnot(None)):
             try:
-                serials = json.loads(issue.serial_number)
+                serials = json.loads(issue.serial_numbers)
                 existing_serials.update(serials)
             except:
                 pass  # Skip invalid JSON
@@ -903,19 +1282,54 @@ def issue():
         flash('Expected return date cannot be in the past. Please select today or a future date.', 'danger')
         return redirect(url_for('admin.issue'))
     # Create the issued equipment record
-    issue = IssuedEquipment(
-        # Some DB schemas may have student_id NOT NULL; use empty string for staff issues
-        student_id=student_id if person_type=='student' else '',
-        student_name=student_name if person_type=='student' else '',
-        student_email=student_email if person_type=='student' else '',
-        student_phone=student_phone if person_type=='student' else '',
-        staff_payroll=staff_payroll if person_type=='staff' else None,
-        staff_name=staff_name if person_type=='staff' else None,
-        staff_email=staff_email if person_type=='staff' else None,
-        equipment_id=eq.id, quantity=qty,
-        expected_return=expected_return,
-        serial_numbers=json.dumps(serial_numbers) if serial_numbers else None
-    )
+    # First, ensure Student or Staff record exists
+    if person_type == 'student':
+        student = Student.query.filter_by(id=student_id).first()
+        if not student:
+            student = Student(
+                id=student_id,
+                name=student_name,
+                email=student_email,
+                phone=student_phone
+            )
+            db.session.add(student)
+        else:
+            # Update existing student info if changed
+            student.name = student_name
+            student.email = student_email
+            student.phone = student_phone
+            db.session.add(student)
+        
+        issue = IssuedEquipment(
+            student_id=student_id,
+            equipment_id=eq.id, 
+            quantity=qty,
+            expected_return=expected_return,
+            serial_numbers=json.dumps(serial_numbers) if serial_numbers else None
+        )
+    else:  # staff
+        staff = Staff.query.filter_by(payroll_number=staff_payroll).first()
+        if not staff:
+            staff = Staff(
+                payroll_number=staff_payroll,
+                name=staff_name,
+                email=staff_email
+            )
+            db.session.add(staff)
+        else:
+            # Update existing staff info if changed
+            staff.name = staff_name
+            staff.email = staff_email
+            db.session.add(staff)
+        
+        issue = IssuedEquipment(
+            student_id=None,
+            staff_payroll=staff_payroll,
+            equipment_id=eq.id, 
+            quantity=qty,
+            expected_return=expected_return,
+            serial_numbers=json.dumps(serial_numbers) if serial_numbers else None
+        )
     # record which user performed the issuance
     try:
         issue.issued_by = current_user.username
@@ -1013,7 +1427,6 @@ def return_item(issue_id):
 
     try:
         db.session.commit()
-        update_clearance_status(issue.student_id)
         flash(f'Item returned successfully.', 'success')
     except Exception as e:
         db.session.rollback()
@@ -1026,8 +1439,67 @@ def return_item(issue_id):
 @admin_bp.route('/issued-equipment')
 @login_required
 def issued_equipment():
-    issued = IssuedEquipment.query.order_by(IssuedEquipment.date_issued.desc()).all()
-    return render_template('issued_equipment.html', issued=issued)
+    # Group issued equipment by recipient to eliminate redundancy
+    from collections import defaultdict
+    from datetime import datetime
+
+    # Get all issued equipment
+    all_issued = IssuedEquipment.query.order_by(IssuedEquipment.date_issued.desc()).all()
+
+    # Group by recipient
+    recipient_groups = defaultdict(list)
+    for issue in all_issued:
+        recipient_key = issue.student_id or issue.staff_payroll
+        if recipient_key:
+            recipient_groups[recipient_key].append(issue)
+
+    # Create aggregated records
+    aggregated_issued = []
+    for recipient_key, issues in recipient_groups.items():
+        # Find the most recent issue for this recipient
+        most_recent = max(issues, key=lambda x: x.date_issued or datetime.min)
+
+        # Calculate totals
+        total_quantity = sum(issue.quantity for issue in issues)
+        has_outstanding = any(issue.status == 'Issued' for issue in issues)
+
+        # Collect all equipment names
+        equipment_names = []
+        seen_equipment = set()
+        for issue in issues:
+            eq_name = issue.equipment.name if issue.equipment else str(issue.equipment_id)
+            if eq_name not in seen_equipment:
+                equipment_names.append(eq_name)
+                seen_equipment.add(eq_name)
+
+        equipment_display = ', '.join(equipment_names) if len(equipment_names) <= 3 else f"{', '.join(equipment_names[:3])}, +{len(equipment_names)-3} more"
+
+        # Create a representative issue object with aggregated data
+        class AggregatedIssue:
+            def __init__(self, representative_issue, total_quantity, equipment_display, has_outstanding):
+                self.student = representative_issue.student
+                self.staff = representative_issue.staff
+                self.student_id = representative_issue.student_id
+                self.staff_payroll = representative_issue.staff_payroll
+                self.equipment = representative_issue.equipment  # Keep first equipment for compatibility
+                self.equipment_display = equipment_display
+                self.quantity = total_quantity
+                self.date_issued = most_recent.date_issued
+                self.issued_by = most_recent.issued_by
+                self.expected_return = most_recent.expected_return
+                self.status = 'Issued' if has_outstanding else 'Returned'
+                self.id = representative_issue.id  # Keep an ID for return functionality
+
+        aggregated_issue = AggregatedIssue(most_recent, total_quantity, equipment_display, has_outstanding)
+        aggregated_issued.append(aggregated_issue)
+
+    # Sort by most recent issue date
+    aggregated_issued.sort(key=lambda x: x.date_issued or datetime.min, reverse=True)
+
+    # Fetch campus distributions
+    distributions = CampusDistribution.query.order_by(CampusDistribution.date_distributed.desc()).all()
+
+    return render_template('issued_equipment.html', issued=aggregated_issued, distributions=distributions)
 
 
 @admin_bp.route('/api/recipient-autocomplete')
@@ -1044,9 +1516,9 @@ def recipient_autocomplete():
     # Search students
     students = db.session.query(
         IssuedEquipment.student_id.label('id'),
-        IssuedEquipment.student_name.label('name'),
+        Student.name.label('name'),
         db.literal('Student').label('type')
-    ).filter(
+    ).join(Student, IssuedEquipment.student_id == Student.id).filter(
         IssuedEquipment.student_id.isnot(None),
         IssuedEquipment.student_id.ilike(f'%{query}%'),
         IssuedEquipment.status == 'Issued'
@@ -1082,202 +1554,6 @@ def recipient_autocomplete():
     return jsonify(results)
 
 
-@admin_bp.route('/return-equipment', methods=['GET', 'POST'])
-@login_required
-def return_equipment():
-    """Return Equipment module: select student/staff and display all their issued equipment"""
-    recipient_id = request.args.get('recipient_id', '').strip()
-    
-    if request.method == 'POST':
-        # Handle return of selected items
-        selected_serials = request.form.getlist('selected_serials')
-        if not selected_serials:
-            flash('No items selected for return.', 'warning')
-            return redirect(url_for('admin.return_equipment', recipient_id=recipient_id))
-        
-        # Group serials by issue for processing
-        serials_by_issue = {}
-        for selected_serial in selected_serials:
-            if ':' in selected_serial:
-                issue_id, serial = selected_serial.split(':', 1)
-                if issue_id not in serials_by_issue:
-                    serials_by_issue[issue_id] = []
-                serials_by_issue[issue_id].append(serial)
-            else:
-                # Handle non-serial items (shouldn't happen with new form, but for compatibility)
-                issue_id = selected_serial
-                if issue_id not in serials_by_issue:
-                    serials_by_issue[issue_id] = []
-        
-        # Process returns for all selected items
-        successful_returns = 0
-        failed_returns = 0
-        error_messages = []
-        
-        for issue_id, selected_serials_in_issue in serials_by_issue.items():
-            try:
-                issue = IssuedEquipment.query.get_or_404(issue_id)
-                
-                # Skip if already returned
-                if issue.status == 'Returned':
-                    error_messages.append(f'Item {issue_id} has already been returned.')
-                    failed_returns += 1
-                    continue
-                
-                # Parse all serial numbers for this issue
-                all_serials = []
-                if issue.serial_numbers:
-                    try:
-                        all_serials = json.loads(issue.serial_numbers)
-                    except:
-                        all_serials = []
-                
-                # Get conditions for each selected serial
-                conditions = {}
-                for serial in selected_serials_in_issue:
-                    condition_key = f'condition_{issue_id}_{serial}'
-                    condition = request.form.get(condition_key)
-                    if not condition or condition not in ('Good', 'Damaged', 'Lost'):
-                        error_messages.append(f'Invalid condition for serial {serial} in item {issue_id}.')
-                        failed_returns += 1
-                        continue
-                    conditions[serial] = condition
-                
-                if not conditions:
-                    continue
-                
-                # Check if all serials are being returned
-                all_selected = len(selected_serials_in_issue) == len(all_serials) if all_serials else True
-                
-                if all_selected:
-                    # All serials are being returned - mark issue as returned
-                    issue.status = 'Returned'
-                    issue.return_conditions = json.dumps(conditions)
-                    issue.date_returned = datetime.now(UTC)
-                else:
-                    # Partial return - update return_conditions but keep issue as Issued
-                    existing_conditions = {}
-                    if issue.return_conditions:
-                        try:
-                            existing_conditions = json.loads(issue.return_conditions)
-                        except:
-                            pass
-                    
-                    # Merge new conditions with existing ones
-                    existing_conditions.update(conditions)
-                    issue.return_conditions = json.dumps(existing_conditions)
-                    
-                    # Only mark as returned if all serials have been returned
-                    if len(existing_conditions) >= len(all_serials):
-                        issue.status = 'Returned'
-                        issue.date_returned = datetime.now(UTC)
-                
-                # Update equipment counts based on conditions
-                equipment = Equipment.query.get_or_404(issue.equipment_id)
-                good_count = sum(1 for c in conditions.values() if c == 'Good')
-                damaged_count = sum(1 for c in conditions.values() if c == 'Damaged')
-                lost_count = sum(1 for c in conditions.values() if c == 'Lost')
-                
-                equipment.quantity += good_count
-                equipment.damaged_count += damaged_count
-                equipment.lost_count += lost_count
-                
-                successful_returns += 1
-                
-            except Exception as e:
-                error_messages.append(f'Error processing item {issue_id}: {str(e)}')
-                failed_returns += 1
-        
-        # Commit all changes
-        try:
-            db.session.commit()
-            
-            # Update clearance status if any student items were returned
-            student_ids = set()
-            for issue_id in serials_by_issue.keys():
-                issue = IssuedEquipment.query.get(issue_id)
-                if issue and issue.student_id:
-                    student_ids.add(issue.student_id)
-            
-            for student_id in student_ids:
-                try:
-                    from Utils.clearance_integration import update_clearance_status
-                    update_clearance_status(student_id)
-                except Exception:
-                    pass
-            
-            # Flash results
-            if successful_returns > 0:
-                flash(f'Successfully returned {successful_returns} item(s).', 'success')
-            if failed_returns > 0:
-                flash(f'Failed to return {failed_returns} item(s).', 'danger')
-                if error_messages:
-                    for msg in error_messages:
-                        flash(msg, 'warning')
-                        
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error committing changes: {str(e)}', 'danger')
-        
-        return redirect(url_for('admin.return_equipment', recipient_id=recipient_id))
-    
-    # GET: Show search form and issued equipment for selected recipient
-    issued_items = []
-    recipient_name = ""
-    recipient_type = ""
-    display_items = []
-    
-    if recipient_id:
-        # Find issued equipment for this recipient
-        issued_items = IssuedEquipment.query.filter(
-            db.or_(
-                IssuedEquipment.student_id.ilike(f"%{recipient_id}%"),
-                IssuedEquipment.staff_payroll.ilike(f"%{recipient_id}%")
-            ),
-            IssuedEquipment.status == 'Issued'
-        ).order_by(IssuedEquipment.date_issued.desc()).all()
-        
-        # Determine recipient type and name
-        if issued_items:
-            first_item = issued_items[0]
-            if first_item.student_id:
-                recipient_type = "Student"
-                recipient_name = first_item.student_name
-            elif first_item.staff_payroll:
-                recipient_type = "Staff/Trainer"
-                recipient_name = first_item.staff_name
-        
-        # Create display items with parsed serials
-        for item in issued_items:
-            if item.serial_numbers:
-                try:
-                    serials = json.loads(item.serial_numbers)
-                except:
-                    serials = []
-            else:
-                serials = []
-            
-            if serials:
-                # For items with serials, create one entry per serial
-                for serial in serials:
-                    display_items.append({
-                        'issue': item,
-                        'serial': serial,
-                        'equipment_name': item.equipment.name if item.equipment else item.equipment_id
-                    })
-            else:
-                # For items without serials, create one entry
-                display_items.append({
-                    'issue': item,
-                    'serial': None,
-                    'equipment_name': item.equipment.name if item.equipment else item.equipment_id
-                })
-    
-    return render_template('return_equipment.html', 
-                         display_items=display_items,
-                         recipient_id=recipient_id,
-                         recipient_name=recipient_name,
-                         recipient_type=recipient_type)
 
 
 @admin_bp.route('/reports')
@@ -1287,13 +1563,15 @@ def reports():
     issued_count = IssuedEquipment.query.filter_by(status='Issued').count()
     returned_count = IssuedEquipment.query.filter_by(status='Returned').count()
     cleared_students = Clearance.query.filter_by(status='Cleared').count()
+    received_equipment_count = CampusDistribution.query.count()
 
     return render_template(
         'reports.html',
         total_equipment=total_equipment,
         issued_count=issued_count,
         returned_count=returned_count,
-        cleared_students=cleared_students
+        cleared_students=cleared_students,
+        received_equipment_count=received_equipment_count
     )
 
 @admin_bp.route('/issued_report')
@@ -1334,9 +1612,9 @@ def issued_report():
                 if admin:
                     issuer_info[item.id] = {'name': admin.username, 'email': admin.email, 'id': admin.id}
                 else:
-                    storekeeper = StoreKeeper.query.filter_by(username=item.issued_by).first()
+                    storekeeper = StoreKeeper.query.filter_by(payroll_number=item.issued_by).first()
                     if storekeeper:
-                        issuer_info[item.id] = {'name': storekeeper.username, 'email': storekeeper.email, 'id': storekeeper.id}
+                        issuer_info[item.id] = {'name': storekeeper.full_name, 'email': storekeeper.email, 'id': storekeeper.id}
                     else:
                         issuer_info[item.id] = {'name': item.issued_by, 'email': '—', 'id': '—'}
             else:
@@ -1348,11 +1626,22 @@ def issued_report():
         writer = csv.writer(si)
         writer.writerow(['Recipient ID', 'Recipient Name', 'Email', 'Phone', 'Equipment Name', 'Category', 'Quantity', 'Date Issued', 'Issuer Name', 'Issuer Email', 'Issuer ID'])
         for issue in items:
+            recipient_id = issue.staff_payroll or issue.student_id
+            recipient_name = ''
+            recipient_email = ''
+            recipient_phone = ''
+            if issue.student:
+                recipient_name = issue.student.name
+                recipient_email = issue.student.email
+                recipient_phone = issue.student.phone
+            elif issue.staff:
+                recipient_name = issue.staff.name
+                recipient_email = issue.staff.email
             writer.writerow([
-                issue.staff_payroll or issue.student_id,
-                issue.staff_name or issue.student_name,
-                (issue.staff_email or issue.student_email) or '—',
-                issue.student_phone or '—',
+                recipient_id,
+                recipient_name,
+                recipient_email or '—',
+                recipient_phone or '—',
                 issue.equipment.name if issue.equipment else issue.equipment_id,
                 issue.equipment.category if issue.equipment else '',
                 issue.quantity,
@@ -1381,72 +1670,15 @@ def issued_report():
             if admin:
                 issuer_info[item.id] = {'name': admin.username, 'email': admin.email, 'id': admin.id}
             else:
-                storekeeper = StoreKeeper.query.filter_by(username=item.issued_by).first()
+                storekeeper = StoreKeeper.query.filter_by(payroll_number=item.issued_by).first()
                 if storekeeper:
-                    issuer_info[item.id] = {'name': storekeeper.username, 'email': storekeeper.email, 'id': storekeeper.id}
+                    issuer_info[item.id] = {'name': storekeeper.full_name, 'email': storekeeper.email, 'id': storekeeper.id}
                 else:
                     issuer_info[item.id] = {'name': item.issued_by, 'email': '—', 'id': '—'}
         else:
             issuer_info[item.id] = {'name': '—', 'email': '—', 'id': '—'}
 
     return render_template('issued_report.html', issued_items=items, equipments=equipments, selected_equipment=equipment_id, page=page, per_page=per_page, total=total, total_pages=total_pages, issuer_info=issuer_info)
-
-@admin_bp.route('/returned_report')
-@login_required
-def returned_report():
-    # Allow filtering by return condition via query string: ?condition=Good|Damaged|Lost|All
-    condition = request.args.get('condition', 'All')
-    try:
-        page = int(request.args.get('page', 1))
-    except ValueError:
-        page = 1
-    try:
-        per_page = int(request.args.get('per_page', 25))
-    except ValueError:
-        per_page = 25
-    export = request.args.get('export')
-
-    base_q = IssuedEquipment.query.filter_by(status='Returned')
-    if condition and condition != 'All':
-        base_q = base_q.filter_by(return_condition=condition)
-
-    total = base_q.count()
-    total_pages = (total + per_page - 1) // per_page if per_page > 0 else 1
-
-    # Export full filtered results
-    if export in ('csv', 'excel'):
-        items = base_q.order_by(IssuedEquipment.date_returned.desc()).all()
-        import csv
-        from io import StringIO
-        si = StringIO()
-        writer = csv.writer(si)
-        writer.writerow(['Recipient ID', 'Recipient Name', 'Equipment Name', 'Category', 'Quantity', 'Date Issued', 'Date Returned', 'Return Condition'])
-        for issue in items:
-            writer.writerow([
-                issue.staff_payroll or issue.student_id,
-                issue.staff_name or issue.student_name,
-                issue.equipment.name if issue.equipment else issue.equipment_id,
-                issue.equipment.category if issue.equipment else '',
-                issue.quantity,
-                issue.date_issued.strftime('%Y-%m-%d'),
-                issue.date_returned.strftime('%Y-%m-%d') if issue.date_returned else '',
-                issue.return_condition or ''
-            ])
-        output = si.getvalue()
-        si.close()
-        from flask import Response
-        if export == 'csv':
-            mimetype = 'text/csv'
-            fname = 'returned_items.csv'
-        else:
-            mimetype = 'application/vnd.ms-excel'
-            fname = 'returned_items.xls'
-        return Response(output, mimetype=mimetype, headers={"Content-Disposition": f"attachment;filename={fname}"})
-
-    items = base_q.order_by(IssuedEquipment.date_returned.desc()).offset((page-1)*per_page).limit(per_page).all()
-
-    return render_template('returned_report.html', returned_items=items, selected_condition=condition, page=page, per_page=per_page, total=total, total_pages=total_pages)
-
 
 @admin_bp.route('/api/inventory_top')
 @login_required
@@ -1528,8 +1760,6 @@ def api_issues_timeseries():
 @admin_bp.route('/equipment-report')
 @login_required
 def equipment_report():
-    page = request.args.get('page', 1, type=int)
-    per_page = 10
     search_name = request.args.get('name', '').strip()
     export_format = request.args.get('export')
 
@@ -1545,26 +1775,45 @@ def equipment_report():
             )
         )
 
-    # Handle export (unpaginated full filtered results)
+    # Fetch all results (unpaginated)
+    equipments = base_q.order_by(Equipment.category, Equipment.name).all()
+
+    # Handle export
     if export_format:
-        items = base_q.order_by(Equipment.category, Equipment.name).all()
         output = io.StringIO()
         writer = csv.writer(output)
         # Write headers
-        writer.writerow(['ID', 'Name', 'Category', 'Category Code', 'Total Quantity', 'Available', 'Issued', 'Damaged', 'Lost'])
-        # Write data
-        for item in items:
-            writer.writerow([
-                item.id,
-                item.name,
-                item.category,
-                item.category_code,
-                item.quantity,
-                item.available_quantity,
-                item.issued_items.filter_by(status='Issued').count(),
-                item.damaged_count,
-                item.lost_count,
-            ])
+        writer.writerow(['Category Name', 'Equipment Name', 'Category Code', 'Total Quantity', 'Available', 'Issued', 'Damaged', 'Lost'])
+        
+        # Group equipment by category
+        from itertools import groupby
+        for category, group in groupby(equipments, key=lambda x: x.category):
+            group_list = list(group)
+            for index, item in enumerate(group_list):
+                # Only write category name for the first item in each group
+                if index == 0:
+                    writer.writerow([
+                        item.category,
+                        item.name,
+                        item.category_code,
+                        item.quantity,
+                        item.available_quantity,
+                        item.issued_items.filter_by(status='Issued').count(),
+                        item.damaged_count,
+                        item.lost_count,
+                    ])
+                else:
+                    # For subsequent items in the group, leave category name blank
+                    writer.writerow([
+                        '',
+                        item.name,
+                        item.category_code,
+                        item.quantity,
+                        item.available_quantity,
+                        item.issued_items.filter_by(status='Issued').count(),
+                        item.damaged_count,
+                        item.lost_count,
+                    ])
         output.seek(0)
         if export_format == 'csv':
             mimetype = 'text/csv'
@@ -1574,24 +1823,370 @@ def equipment_report():
             fname = 'equipment_inventory.xls'
         return Response(output.getvalue(), mimetype=mimetype, headers={"Content-Disposition": f"attachment;filename={fname}"})
 
-    # For normal page view (paginated)
-    total = base_q.count()
-    total_pages = (total + per_page - 1) // per_page if per_page > 0 else 1
-    equipments = base_q.order_by(Equipment.category, Equipment.name) \
-                      .offset((page-1)*per_page) \
-                      .limit(per_page) \
-                      .all()
-
+    # Calculate issued count for each equipment
     for equipment in equipments:
         equipment.issued_count = equipment.issued_items.filter_by(status='Issued').count()
 
     return render_template('equipment_report.html',
                          equipments=equipments,
-                         search_name=search_name,
-                         pagination={"page": page, "per_page": per_page,
-                                     "total": total, "total_pages": total_pages,
-                                     "has_prev": page > 1,
-                                     "has_next": page < total_pages,
-                                     "prev_num": page - 1,
-                                     "next_num": page + 1,
-                                     "iter_pages": lambda: range(1, total_pages + 1)})
+                         search_name=search_name)
+
+
+@admin_bp.route('/distribute-to-campus', methods=['GET', 'POST'])
+@login_required
+def distribute_to_campus():
+    """Distribute equipment to satellite campuses.
+    
+    GET: Show distribution form with satellite campuses and equipment dropdown
+    POST: Submit distribution and record it
+    """
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+    
+    if request.method == 'GET':
+        campuses = SatelliteCampus.query.filter_by(is_active=True).all()
+        return render_template('distribute_to_campus.html', campuses=campuses)
+    
+    # POST: Process distribution
+    campus_id = request.form.get('campus_id', '').strip()
+    category_code = request.form.get('category_code', '').strip()
+    category_name = request.form.get('category_name', '').strip()
+    equipment_id = request.form.get('equipment_id', '').strip()
+    quantity_str = request.form.get('quantity', '').strip()
+    notes = request.form.get('notes', '').strip()
+    document = request.files.get('document')
+    
+    # Validate inputs
+    if not all([campus_id, category_code, category_name, equipment_id, quantity_str]):
+        flash('Please fill in all fields.', 'danger')
+        return redirect(url_for('admin.distribute_to_campus'))
+    
+    try:
+        campus_id = int(campus_id)
+        equipment_id = int(equipment_id)
+        quantity = int(quantity_str)
+        if quantity <= 0:
+            raise ValueError('Quantity must be positive')
+    except (ValueError, TypeError):
+        flash('Invalid input: ensure campus, equipment, and quantity are correct.', 'danger')
+        return redirect(url_for('admin.distribute_to_campus'))
+    
+    # Verify campus exists
+    campus = SatelliteCampus.query.get(campus_id)
+    if not campus or not campus.is_active:
+        flash('Invalid satellite campus selected.', 'danger')
+        return redirect(url_for('admin.distribute_to_campus'))
+    
+    # Verify equipment exists and has sufficient quantity
+    equipment = Equipment.query.get(equipment_id)
+    if not equipment or not equipment.is_active:
+        flash('Invalid equipment selected.', 'danger')
+        return redirect(url_for('admin.distribute_to_campus'))
+    
+    if equipment.quantity < quantity:
+        flash(f'Insufficient quantity. Available: {equipment.quantity}, Requested: {quantity}', 'danger')
+        return redirect(url_for('admin.distribute_to_campus'))
+    
+    # Handle file upload if provided
+    document_path = None
+    if document and document.filename:
+        try:
+            from werkzeug.utils import secure_filename
+            import os
+            
+            # Create documents directory if it doesn't exist
+            upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads', 'distributions')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # Validate file extension
+            allowed_extensions = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'}
+            if '.' in document.filename:
+                ext = document.filename.rsplit('.', 1)[1].lower()
+                if ext not in allowed_extensions:
+                    flash('Invalid file format. Allowed: PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG', 'warning')
+                else:
+                    # Save file with timestamp
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"dist_{campus_id}_{equipment_id}_{timestamp}_{secure_filename(document.filename)}"
+                    document.save(os.path.join(upload_dir, filename))
+                    document_path = f"distributions/{filename}"
+        except Exception as e:
+            flash(f'Warning: Could not save document - {str(e)}', 'warning')
+    
+    try:
+        # Create distribution record
+        distribution = CampusDistribution(
+            campus_id=campus_id,
+            equipment_id=equipment_id,
+            category_code=category_code,
+            category_name=category_name,
+            quantity=quantity,
+            distributed_by=current_user.username,
+            notes=notes if notes else None,
+            document_path=document_path
+        )
+        db.session.add(distribution)
+        
+        # Update equipment quantity
+        equipment.quantity -= quantity
+        db.session.add(equipment)
+        
+        db.session.commit()
+        flash(f'Successfully distributed {quantity} units of {equipment.name} to {campus.name}.', 'success')
+        if document_path:
+            flash('Supporting document uploaded successfully.', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error during distribution: {str(e)}', 'danger')
+    
+    return redirect(url_for('admin.distribute_to_campus'))
+
+
+@admin_bp.route('/manage-campuses', methods=['GET', 'POST'])
+@login_required
+def manage_campuses():
+    """Simple campus management: list and add satellite campuses."""
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        code = request.form.get('code', '').strip()
+        location = request.form.get('location', '').strip()
+        if not name or not code:
+            flash('Campus name and code are required.', 'danger')
+            return redirect(url_for('admin.manage_campuses'))
+
+        existing = SatelliteCampus.query.filter((SatelliteCampus.name == name) | (SatelliteCampus.code == code)).first()
+        if existing:
+            flash('Campus with that name or code already exists.', 'warning')
+            return redirect(url_for('admin.manage_campuses'))
+
+        campus = SatelliteCampus(name=name, code=code, location=location, is_active=True)
+        db.session.add(campus)
+        db.session.commit()
+        flash('Satellite campus added.', 'success')
+        return redirect(url_for('admin.manage_campuses'))
+
+    campuses = SatelliteCampus.query.order_by(SatelliteCampus.name).all()
+    return render_template('manage_campuses.html', campuses=campuses)
+
+
+@admin_bp.route('/distributions')
+@login_required
+def view_distributions():
+    """View all campus distributions with download capability for uploaded documents."""
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+    
+    distributions = CampusDistribution.query.order_by(CampusDistribution.date_distributed.desc()).all()
+    return render_template('distributions.html', distributions=distributions)
+
+
+@admin_bp.route('/api/categories')
+@login_required
+def api_categories():
+    """API endpoint to get all equipment categories."""
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+    
+    categories = EquipmentCategory.query.filter_by(is_active=True).all()
+    return jsonify([
+        {'id': cat.id, 'code': cat.category_code, 'name': cat.category_name}
+        for cat in categories
+    ])
+
+
+@admin_bp.route('/api/equipment-by-category/<category_code>')
+@login_required
+def api_equipment_by_category(category_code):
+    """API endpoint to get equipment items matching a category code."""
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+    
+    equipment_list = Equipment.query.filter_by(
+        category_code=category_code,
+        is_active=True
+    ).all()
+    return jsonify([
+        {'id': eq.id, 'name': eq.name, 'quantity': eq.quantity}
+        for eq in equipment_list
+    ])
+
+
+@admin_bp.route('/download-distribution-document/<int:distribution_id>')
+@login_required
+def download_distribution_document(distribution_id):
+    """Download supporting document for a distribution."""
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+    
+    distribution = CampusDistribution.query.get_or_404(distribution_id)
+    
+    if not distribution.document_path:
+        flash('No document available for this distribution.', 'warning')
+        return redirect(url_for('admin.issued_equipment'))
+    
+    import os
+    from flask import send_file
+    
+    # Construct the full file path
+    file_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        '..',
+        'uploads',
+        distribution.document_path
+    )
+    
+    # Security check: ensure file exists and path is within uploads directory
+    if not os.path.exists(file_path):
+        flash('Document file not found.', 'danger')
+        return redirect(url_for('admin.issued_equipment'))
+    
+    # Ensure path is within uploads directory (prevent directory traversal)
+    uploads_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        '..',
+        'uploads'
+    )
+    if not os.path.abspath(file_path).startswith(os.path.abspath(uploads_dir)):
+        abort(403)
+    
+    # Extract filename for download
+    filename = os.path.basename(file_path)
+    
+    try:
+        return send_file(file_path, as_attachment=True, download_name=filename)
+    except Exception as e:
+        flash(f'Error downloading document: {str(e)}', 'danger')
+        return redirect(url_for('admin.issued_equipment'))
+
+@admin_bp.route('/profile', methods=['POST'])
+@login_required
+def profile():
+    """Update admin profile (email)"""
+    if not isinstance(current_user, Admin):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip() if data else None
+        
+        if not email:
+            return jsonify({'success': False, 'error': 'Email is required'})
+        
+        # Validate email format
+        if '@' not in email or '.' not in email:
+            return jsonify({'success': False, 'error': 'Invalid email format'})
+        
+        # Check if email already exists for another admin
+        existing = Admin.query.filter(Admin.id != current_user.id, Admin.email == email).first()
+        if existing:
+            return jsonify({'success': False, 'error': 'Email already in use'})
+        
+        current_user.email = email
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Profile updated'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+@admin_bp.route('/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """Change admin password"""
+    if not isinstance(current_user, Admin):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    try:
+        from werkzeug.security import check_password_hash, generate_password_hash
+        
+        data = request.get_json()
+        current_password = data.get('current_password', '') if data else ''
+        new_password = data.get('new_password', '') if data else ''
+        
+        if not current_password or not new_password:
+            return jsonify({'success': False, 'error': 'All fields are required'})
+        
+        # Verify current password
+        if not check_password_hash(current_user.password_hash, current_password):
+            return jsonify({'success': False, 'error': 'Current password is incorrect'})
+        
+        # Validate new password length
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'error': 'Password must be at least 6 characters'})
+        
+        # Update password
+        current_user.password_hash = generate_password_hash(new_password)
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Password changed successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@admin_bp.route('/user-management')
+@login_required
+def user_management():
+    """View all storekeepers and their approval status"""
+    # Get all pending (unapproved) storekeepers
+    pending_storekeepers = StoreKeeper.query.filter_by(is_approved=False).all()
+    
+    # Get all approved storekeepers
+    approved_storekeepers = StoreKeeper.query.filter_by(is_approved=True).all()
+    
+    return render_template('user_management.html',
+                         pending_storekeepers=pending_storekeepers,
+                         approved_storekeepers=approved_storekeepers)
+
+
+@admin_bp.route('/user-management/approve/<int:user_id>', methods=['POST'])
+@login_required
+def approve_storekeeper(user_id):
+    """Approve a pending storekeeper"""
+    storekeeper = StoreKeeper.query.get_or_404(user_id)
+    
+    if storekeeper.is_approved:
+        flash('This storekeeper is already approved.', 'info')
+    else:
+        storekeeper.is_approved = True
+        storekeeper.approved_at = datetime.utcnow
+        db.session.commit()
+        flash(f'Storekeeper "{storekeeper.full_name}" has been approved successfully.', 'success')
+    
+    return redirect(url_for('admin.user_management'))
+
+
+@admin_bp.route('/user-management/reject/<int:user_id>', methods=['POST'])
+@login_required
+def reject_storekeeper(user_id):
+    """Reject and delete a pending storekeeper"""
+    storekeeper = StoreKeeper.query.get_or_404(user_id)
+    full_name = storekeeper.full_name
+    
+    if storekeeper.is_approved:
+        flash('Cannot reject an already approved storekeeper.', 'warning')
+    else:
+        db.session.delete(storekeeper)
+        db.session.commit()
+        flash(f'Storekeeper "{full_name}" has been rejected and removed.', 'success')
+    
+    return redirect(url_for('admin.user_management'))
+
+
+@admin_bp.route('/user-management/deactivate/<int:user_id>', methods=['POST'])
+@login_required
+def deactivate_storekeeper(user_id):
+    """Deactivate an approved storekeeper"""
+    storekeeper = StoreKeeper.query.get_or_404(user_id)
+    
+    if not storekeeper.is_approved:
+        flash('This storekeeper is not approved yet.', 'warning')
+    else:
+        storekeeper.is_approved = False
+        storekeeper.approved_at = None
+        db.session.commit()
+        flash(f'Storekeeper "{storekeeper.full_name}" has been deactivated.', 'success')
+    
+    return redirect(url_for('admin.user_management'))

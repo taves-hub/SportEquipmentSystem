@@ -10,8 +10,12 @@
 </style>
 <div class="container py-5">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
-    <h3 class="text-success mb-0">Returned Items Report</h3>
+    {% if recipient_id %}
+      <a href="{{ url_for('admin.clearance_report') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Clearance</a>
+    {% else %}
+      <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+    {% endif %}
+    <h3 class="text-success mb-0">Returned Items Report{% if recipient_id %} - {{ recipient_id }}{% endif %}</h3>
     <div style="width: 85px;"></div><!-- Spacer for alignment -->
   </div>
 
@@ -25,12 +29,19 @@
           <option value="Damaged" {% if selected_condition == 'Damaged' %}selected{% endif %}>Damaged</option>
           <option value="Lost" {% if selected_condition == 'Lost' %}selected{% endif %}>Lost</option>
         </select>
-        <button class="btn btn-primary" type="submit">Filter</button>
+        {% if recipient_id %}
+          <input type="hidden" name="recipient_id" value="{{ recipient_id }}">
+        {% endif %}
+        <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Filter</button>
       </form>
     </div>
     <div class="col-md-4 d-flex justify-content-end align-items-center">
       <div>
-        <a href="{{ url_for('admin.returned_report', condition=selected_condition, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        {% if recipient_id %}
+          <a href="{{ url_for('admin.returned_report', condition=selected_condition, recipient_id=recipient_id, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        {% else %}
+          <a href="{{ url_for('admin.returned_report', condition=selected_condition, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        {% endif %}
         <!-- Print PDF will open the browser print dialog; user may choose 'Save as PDF' -->
         <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Print PDF</button>
       </div>
@@ -54,7 +65,7 @@
       {% for issue in returned_items %}
       <tr>
         <td>{{ issue.staff_payroll or issue.student_id }}</td>
-        <td>{{ issue.staff_name or issue.student_name }}</td>
+        <td>{{ (issue.staff.name if issue.staff else issue.student.name if issue.student else None) or '—' }}</td>
         <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
         <td>{{ issue.equipment.category if issue.equipment else '' }}</td>
         <td>{{ issue.quantity }}</td>

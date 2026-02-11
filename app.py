@@ -1,15 +1,16 @@
+import os
 import pymysql
-pymysql.install_as_MySQLdb()
 from flask import Flask, redirect, url_for, send_from_directory
 from config import Config
 from extensions import db, login_manager, migrate
 from models import Admin, StoreKeeper
-import os
 
-# User loader function
+# MySQL compatibility
+pymysql.install_as_MySQLdb()
+
+# User loader function for Flask-Login
 @login_manager.user_loader
 def load_user(user_id):
-    # user_id will be role-prefixed (e.g. 'admin-3' or 'storekeeper-2')
     try:
         if not user_id:
             return None
@@ -25,37 +26,36 @@ def load_user(user_id):
         return None
     return None
 
+# Application factory
 def create_app(test_config=None):
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Apply test overrides before initializing extensions
+    # Apply test overrides
     if test_config:
         app.config.update(test_config)
 
-    # Initialize extensions with app
+    # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    # Import blueprints
+    # Register blueprints
     from routes.admin_routes import admin_bp
     from routes.auth_routes import auth_bp
-    # storekeeper blueprint
     from routes.storekeeper_routes import storekeeper_bp
 
-    # Register blueprints
     app.register_blueprint(admin_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(storekeeper_bp)
 
-    # Context processor for current time
+    # Context processor to inject current datetime
     @app.context_processor
     def inject_now():
         from datetime import datetime
         return {'now': datetime.now()}
 
-    # Custom Jinja2 filters
+    # Custom Jinja2 filter
     @app.template_filter('from_json')
     def from_json_filter(value):
         import json
@@ -66,23 +66,26 @@ def create_app(test_config=None):
                 return []
         return []
 
-    # Add root route
+    # Root route
     @app.route('/')
     def index():
         return redirect(url_for('auth.login'))
 
-    # Serve uploaded files from uploads directory
+    # Serve uploaded files
     @app.route('/uploads/<path:filepath>')
     def serve_upload(filepath):
-        """Serve uploaded files from the uploads directory"""
         uploads_dir = os.path.join(app.root_path, 'uploads')
         return send_from_directory(uploads_dir, filepath)
 
+    # Ensure database tables exist
     with app.app_context():
         db.create_all()
 
     return app
 
+# Create app instance at module level for Gunicorn and Flask CLI
+app = create_app()
+
+# Run locally
 if __name__ == "__main__":
-    app = create_app()
     app.run(debug=True)

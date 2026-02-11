@@ -103,7 +103,15 @@
                 {% endif %}
               </td>
               <td>
-                <span class="text-muted small">—</span>
+                {% if status == 'Cleared' %}
+                  <form method="POST" action="{{ url_for('admin.clearance_rollback', recipient_id=recipient_id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Rollback clearance" onclick="return confirm('Are you sure you want to rollback the clearance for {{ info.name }}?');">
+                      <i class="bi bi-arrow-counterclockwise"></i> Rollback
+                    </button>
+                  </form>
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
               </td>
             </tr>
             {% endfor %}

@@ -234,13 +234,16 @@
           Cancel Issue
         </button>
 
-        <form method="post" action="{{ url_for('storekeeper.issue') }}">
+        <form method="post" action="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.issue') }}{% else %}{{ url_for('admin.issue') }}{% endif %}">
           {% for key, values in original_form.items() %}
             {% for value in values %}
               <input type="hidden" name="{{ key }}" value="{{ value }}">
             {% endfor %}
           {% endfor %}
-          <button type="submit" class="btn btn-danger">
+          <input type="hidden" name="confirm_unreturned" value="true">
+          <button id="confirmContinueBtn" type="submit" class="btn btn-danger" onclick="(function(e){
+              try{ this.disabled=false; }catch(err){};
+            }).call(this);">
             Confirm & Continue
           </button>
         </form>
@@ -252,11 +255,25 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const modal = new bootstrap.Modal(document.getElementById('unreturnedModal'), {
+    const modalEl = document.getElementById('unreturnedModal');
+    const modal = new bootstrap.Modal(modalEl, {
       backdrop: 'static',
       keyboard: false
     });
+    // Ensure the confirm button is enabled when modal is shown
+    modalEl.addEventListener('shown.bs.modal', function () {
+      const confirmBtn = document.getElementById('confirmContinueBtn');
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Confirm & Continue';
+      }
+    });
     modal.show();
+    // Also enable immediately in case the modal is already visible
+    const confirmBtnImmediate = document.getElementById('confirmContinueBtn');
+    if (confirmBtnImmediate) {
+      confirmBtnImmediate.disabled = false;
+    }
   });
 </script>
 {% endif %}

@@ -105,7 +105,15 @@
                   </td>
                   <td>
                     <small class="text-muted">
-                      {{ storekeeper.approved_at.strftime('%d %b %Y %H:%M') if storekeeper.approved_at else 'N/A' }}
+                      {% if storekeeper.approved_at %}
+                        {% if storekeeper.approved_at is string %}
+                          {{ storekeeper.approved_at }}
+                        {% else %}
+                          {{ storekeeper.approved_at.strftime('%d %b %Y %H:%M') }}
+                        {% endif %}
+                      {% else %}
+                        N/A
+                      {% endif %}
                     </small>
                   </td>
                   <td>

@@ -1,7 +1,10 @@
-from flask import Flask, redirect, url_for
+import pymysql
+pymysql.install_as_MySQLdb()
+from flask import Flask, redirect, url_for, send_from_directory
 from config import Config
 from extensions import db, login_manager, migrate
 from models import Admin, StoreKeeper
+import os
 
 # User loader function
 @login_manager.user_loader
@@ -67,6 +70,13 @@ def create_app(test_config=None):
     @app.route('/')
     def index():
         return redirect(url_for('auth.login'))
+
+    # Serve uploaded files from uploads directory
+    @app.route('/uploads/<path:filepath>')
+    def serve_upload(filepath):
+        """Serve uploaded files from the uploads directory"""
+        uploads_dir = os.path.join(app.root_path, 'uploads')
+        return send_from_directory(uploads_dir, filepath)
 
     with app.app_context():
         db.create_all()

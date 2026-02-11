@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container py-5">
+  <h4 class="text-center mb-4">Damage & Loss Clearance</h4>
+  
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if damage_items %}
+      
+      <!-- Search Box and Needs Review filter -->
+      <div class="mb-3 d-flex gap-2 align-items-center">
+        <input id="damageSearch" type="search" class="form-control form-control-sm" placeholder="Search by recipient, equipment, or condition...">
+        <div class="form-check ms-2">
+          <input class="form-check-input" type="checkbox" id="filterReview">
+          <label class="form-check-label small" for="filterReview">Show only Needs Review</label>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0" id="damageTable">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Recipient Type</th>
+              <th>Recipient ID</th>
+              <th>Recipient Name</th>
+              <th>Equipment</th>
+              <th>Condition</th>
+              <th class="d-none d-sm-table-cell">Date Returned</th>
+                <th class="text-center">Status</th>
+                <th class="text-center">Admin Notes</th>
+                <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in damage_items %}
+              {% for damage in item._damage_list %}
+              <tr data-needs-review="{{ '1' if item._needs_review else '0' }}" class="{% if item._needs_review %}table-warning{% endif %}">
+                <td>{{ loop.index }}</td>
+                <td>
+                  <span class="badge {% if item._recipient_type == 'Student' %}bg-info{% else %}bg-warning{% endif %}">
+                    {{ item._recipient_type }}
+                  </span>
+                </td>
+                <td class="fw-semibold">{{ item.student_id or item.staff_payroll }}</td>
+                <td>{{ item._recipient_name }}</td>
+                <td>{{ item.equipment.name if item.equipment else '—' }}</td>
+                <td>
+                  <span class="badge {% if damage.condition == 'Damaged' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                    {{ damage.condition }}
+                  </span>
+                </td>
+                <td class="d-none d-sm-table-cell">{{ item.date_returned.strftime('%Y-%m-%d') if item.date_returned else '—' }}</td>
+                <td class="text-center">
+                  {% if item.damage_clearance_status %}
+                    <span class="badge {% if item.damage_clearance_status in ['Waived'] %}bg-warning{% elif item.damage_clearance_status in ['Repaired','Replaced'] %}bg-success{% else %}bg-info{% endif %}">{{ item.damage_clearance_status }}</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Pending</span>
+                  {% endif %}
+                </td>
+                <td class="text-center small">
+                  {% if item._admin_notes %}
+                    <div>{{ item._admin_notes }}</div>
+                  {% endif %}
+                  {% if item._document_path %}
+                    <div><a href="/{{ item._document_path }}" target="_blank">View document</a></div>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if not item.damage_clearance_status or item.damage_clearance_status == 'Pending' %}
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#clearanceModal" 
+                            onclick="setIssueData({{ item.id }}, '{{ item._recipient_name }}', '{{ item.equipment.name }}', '{{ damage.condition }}')">
+                      <i class="bi bi-tools"></i> Clear / Escalate
+                    </button>
+                  {% elif item.damage_clearance_status == 'Escalated' %}
+                    <span class="text-muted small">Escalated to admin</span>
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="text-muted small mt-2">
+        Total: <strong>{{ damage_items|length }}</strong> recipient(s) with damaged/lost equipment
+      </div>
+
+      {% else %}
+      <div class="alert alert-info text-center">
+        No damaged or lost equipment requiring clearance.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Clearance Modal -->
+<div class="modal fade" id="clearanceModal" tabindex="-1" aria-labelledby="clearanceModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="clearanceModalLabel">Process Damage Clearance</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" id="clearanceForm">
+        <div class="modal-body">
+          <div class="alert alert-warning" role="alert">
+            <strong>Recipient:</strong> <span id="modalRecipient"></span><br>
+            <strong>Equipment:</strong> <span id="modalEquipment"></span><br>
+            <strong>Condition:</strong> <span id="modalCondition"></span>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label"><strong>Action</strong></label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="action" id="actionClear" value="clear" checked>
+              <label class="form-check-label" for="actionClear">
+                Clear (Equipment Repaired/Replaced)
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="action" id="actionEscalate" value="escalate">
+              <label class="form-check-label" for="actionEscalate">
+                Escalate to Admin (Can't clear at this moment)
+              </label>
+            </div>
+          </div>
+
+          <div class="mb-3" id="clearanceStatusDiv">
+            <label for="clearanceStatus" class="form-label"><strong>Clearance Status</strong></label>
+            <select class="form-select" name="clearance_status" id="clearanceStatus">
+              <option value="">-- Select Status --</option>
+              <option value="Repaired">Repaired</option>
+              <option value="Replaced">Replaced</option>
+            </select>
+            <small class="text-muted">Choose whether equipment was repaired or replaced</small>
+          </div>
+
+          <div class="mb-3">
+            <label for="notes" class="form-label">Notes (Optional)</label>
+            <textarea class="form-control form-control-sm" name="notes" id="notes" rows="3" placeholder="Add any additional notes..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle"></i> Process
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .table-hover tbody tr:hover { background-color: #f4f7fb; }
+  .table-sm td, .table-sm th { padding: .5rem .6rem; }
+  
+  #damageTable th {
+    border: 1px solid #495057 !important;
+  }
+  
+  #damageTable td {
+    border: 1px solid #dee2e6 !important;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const damageSearch = document.getElementById('damageSearch');
+    const clearanceStatusDiv = document.getElementById('clearanceStatusDiv');
+    const actionClear = document.getElementById('actionClear');
+    const actionEscalate = document.getElementById('actionEscalate');
+    const clearanceStatus = document.getElementById('clearanceStatus');
+
+    // Search functionality and Needs Review filter
+    const filterReview = document.getElementById('filterReview');
+    function applyFilters() {
+      const q = damageSearch.value.trim().toLowerCase();
+      const onlyReview = filterReview.checked;
+      const rows = document.querySelectorAll('#damageTable tbody tr');
+      rows.forEach(function(r) {
+        const text = r.textContent.toLowerCase();
+        const matchesSearch = text.indexOf(q) !== -1;
+        const needsReview = r.getAttribute('data-needs-review') === '1';
+        const show = matchesSearch && (!onlyReview || needsReview);
+        r.style.display = show ? '' : 'none';
+      });
+    }
+
+    if (damageSearch) {
+      damageSearch.addEventListener('input', applyFilters);
+    }
+    if (filterReview) {
+      filterReview.addEventListener('change', applyFilters);
+    }
+
+    // Toggle clearance status visibility based on action
+    actionClear.addEventListener('change', function() {
+      if (this.checked) {
+        clearanceStatusDiv.style.display = 'block';
+        clearanceStatus.required = true;
+      }
+    });
+
+    actionEscalate.addEventListener('change', function() {
+      if (this.checked) {
+        clearanceStatusDiv.style.display = 'none';
+        clearanceStatus.required = false;
+        clearanceStatus.value = '';
+      }
+    });
+
+    // Initialize
+    if (!actionClear.checked) {
+      clearanceStatusDiv.style.display = 'none';
+    }
+
+    // Form validation
+    document.getElementById('clearanceForm').addEventListener('submit', function(e) {
+      const action = document.querySelector('input[name="action"]:checked').value;
+      
+      if (action === 'clear' && !clearanceStatus.value) {
+        e.preventDefault();
+        alert('Please select a clearance status (Repaired or Replaced)');
+        return false;
+      }
+    });
+  });
+
+  function setIssueData(issueId, recipientName, equipmentName, condition) {
+    // Set modal data
+    document.getElementById('modalRecipient').textContent = recipientName;
+    document.getElementById('modalEquipment').textContent = equipmentName;
+    document.getElementById('modalCondition').textContent = condition;
+
+    // Update form action
+    const form = document.getElementById('clearanceForm');
+    form.action = `/storekeeper/damage-clearance/${issueId}`;
+  }
+</script>
+
+{% endblock %}

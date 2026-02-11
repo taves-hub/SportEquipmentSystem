@@ -74,6 +74,11 @@ class IssuedEquipment(db.Model):
     # Condition recorded when equipment is returned: Good, Damaged, Lost
     return_conditions = db.Column(db.Text, nullable=True)
     date_returned = db.Column(db.DateTime, nullable=True)
+    # Track damage/loss clearance: None, Repaired, Replaced, Escalated
+    damage_clearance_status = db.Column(db.String(50), nullable=True)
+    damage_clearance_notes = db.Column(db.Text, nullable=True)
+    # Path to an attached admin document (stored file path)
+    damage_clearance_document = db.Column(db.String(500), nullable=True)
     # Track which user created the issue (admin or storekeeper username)
     issued_by = db.Column(db.String(120), nullable=True)
     serial_numbers = db.Column(db.Text, nullable=True)
@@ -144,3 +149,14 @@ class CampusDistribution(db.Model):
     # Relationships
     campus = db.relationship('SatelliteCampus', backref='distributions')
     equipment = db.relationship('Equipment', backref='campus_distributions')
+
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    recipient_role = db.Column(db.String(20), nullable=False)  # 'admin' or 'storekeeper'
+    recipient_id = db.Column(db.Integer, nullable=True)  # storekeeper.id when applicable; NULL for admin broadcasts
+    message = db.Column(db.Text, nullable=False)
+    url = db.Column(db.String(500), nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

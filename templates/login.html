@@ -4,16 +4,14 @@
 <div class="login-root d-flex" style="min-height:80vh;">
     <div class="login-hero flex-grow-1">
         <div class="slideshow" aria-hidden="false">
-            <img src="{{ url_for('static', filename='pictures/3X3 CHAMPIONSHIP.jpg') }}" alt="slide-1" class="slide active">
-            <img src="{{ url_for('static', filename='pictures/3X3 CHAMPIONSHIP IN  EGYPT.jpg') }}" alt="slide-2" class="slide">
-            <img src="{{ url_for('static', filename='pictures/Unesco 02.jpg') }}" alt="slide-3" class="slide">
-            <img src="{{ url_for('static', filename='pictures/Unesco 03.jpg') }}" alt="slide-4" class="slide">
-            <img src="{{ url_for('static', filename='pictures/Volleyball Men.jpg') }}" alt="slide-5" class="slide">
-            <img src="{{ url_for('static', filename='pictures/VOLLEYBALL WOMEN.jpg') }}" alt="slide-6" class="slide">
+            <img src="{{ url_for('static', filename='background1.jpg') }}" alt="background" class="slide active">
         </div>
-        <!--<div class="hero-overlay">
-            <div class="hero-text">Stronger Together <br> Through Sport <br/>We Win</div>
-        </div> -->
+        <div class="hero-overlay">
+            <div class="hero-text">
+                <div style="font-size: 2.2rem; font-weight: 700; letter-spacing: 0.8px;">University of Nairobi</div>
+                <div style="font-size: 1.2rem; font-weight: 300; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Sports Equipment Management System</div>
+            </div>
+        </div>
 
     </div>
     <div class="login-panel d-flex align-items-center justify-content-center">
@@ -35,7 +33,7 @@
                     <form method="POST" autocomplete="off">
                         <div class="mb-3">
                             <label for="username" class="form-label fw-bold">Username</label>
-                            <input type="text" class="form-control" id="username" name="username" placeholder="Username" required autofocus>
+                            <input type="text" class="form-control" id="username" name="username" placeholder="enter payroll number" required autofocus>
                         </div>
                         <div class="mb-3 position-relative">
                             <label for="password" class="form-label fw-bold">Password</label>
@@ -63,10 +61,10 @@
     .login-root { background: #f7f7fb; min-height:100vh; }
     .login-hero { flex:1 1 60%; position:relative; overflow:hidden; min-width:0; }
     .slideshow { position:absolute; inset:0; }
-    .slideshow .slide { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity 1s ease-in-out; display:block; }
+    .slideshow .slide { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity 1s ease-in-out; display:block; filter: blur(0.5px); }
     .slideshow .slide.active { opacity:1; }
-    .hero-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.24); display:flex; align-items:center; justify-content:center; }
-    .hero-text { color:#fff; font-weight:800; font-size:48px; text-align:center; letter-spacing:1px; text-transform:uppercase; padding:0 2rem; z-index:5; max-width:90%; }
+    .hero-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10; }
+    .hero-text { color:#ffffff; font-weight:800; font-size:48px; text-align:center; letter-spacing:1px; text-transform:none; max-width:90%; }
     .login-panel { flex:0 0 40%; background:transparent; padding:3rem 2rem; min-width:320px; }
     .welcome-title { color:#4CAF50; font-weight:700; font-size:40px; margin-top:0.5rem; }
     .rounded-lg { border-radius:10px; }

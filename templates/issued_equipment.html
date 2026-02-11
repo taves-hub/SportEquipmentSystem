@@ -23,7 +23,11 @@
               <th>Equipment</th>
               <th class="text-center">Quantity</th>
               <th class="d-none d-sm-table-cell">Date Issued</th>
-              <th class="d-none d-md-table-cell">Expected Return</th>
+              <th class="d-none d-md-table-cell">Phone</th>
+              {% if request.endpoint == 'admin.issued_equipment' %}
+              <th class="d-none d-lg-table-cell">Campus</th>
+              <th class="d-none d-lg-table-cell">Storekeeper</th>
+              {% endif %}
               <th class="text-center">Status</th>
               <th class="text-center">Actions</th>
             </tr>
@@ -47,32 +51,37 @@
                   {% elif item.staff %}
                     {{ item.staff.name }}
                   {% else %}
-                    {{ item.equipment_display if item.equipment_display else '—' }}
+                    —
                   {% endif %}
                 </td>
                 <td>{{ item.equipment.name if item.equipment else '—' }}</td>
                 <td class="text-center">{{ item.quantity }}</td>
                 <td class="d-none d-sm-table-cell">{{ item.date_issued.strftime('%Y-%m-%d') if item.date_issued else '—' }}</td>
                 <td class="d-none d-md-table-cell">
-                  {% if item.expected_return %}
-                    {{ item.expected_return.strftime('%Y-%m-%d') }}
-                    {% if item.status == 'Issued' and item.expected_return.date() <= now.date() %}
-                      <span class="badge bg-danger ms-1">OVERDUE</span>
-                    {% endif %}
+                  {% if item.student and item.student.phone %}
+                    {{ item.student.phone }}
+                  {% elif item.staff and item.staff.email %}
+                    {{ item.staff.email }}
                   {% else %}
                     —
                   {% endif %}
                 </td>
+                {% if request.endpoint == 'admin.issued_equipment' %}
+                <td class="d-none d-lg-table-cell">{{ item._campus_name }}</td>
+                <td class="d-none d-lg-table-cell">{{ item._storekeeper_name }}</td>
+                {% endif %}
                 <td class="text-center">
                   {% if item.status == 'Issued' %}
                     <span class="badge bg-warning text-dark">Issued</span>
+                  {% elif item.status == 'Partial Return' %}
+                    <span class="badge bg-info">Partial Return</span>
                   {% else %}
                     <span class="badge bg-success">Returned</span>
                   {% endif %}
                 </td>
                 <td class="text-center">
-                  {% if item.status == 'Issued' %}
-                    <a href="{{ url_for('storekeeper.return_item', issue_id=item.id) }}" class="btn btn-sm btn-outline-primary" title="Return equipment">Return</a>
+                  {% if item.status in ('Issued', 'Partial Return') %}
+                    <a href="{{ url_for('storekeeper.return_equipment', return_recipient=(item.student_id or item.staff_payroll)) }}" class="btn btn-sm btn-outline-primary" title="Return equipment">Return</a>
                   {% else %}
                     <span class="text-muted small">—</span>
                   {% endif %}
@@ -81,7 +90,7 @@
               {% endfor %}
             {% else %}
               <tr>
-                <td colspan="10" class="text-center text-muted">No issued equipment yet.</td>
+                <td colspan="12" class="text-center text-muted">No issued equipment yet.</td>
               </tr>
             {% endif %}
           </tbody>

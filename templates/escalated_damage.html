@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container py-5">
+  <h4 class="text-center mb-4">Escalated Damage & Loss Clearance</h4>
+  
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if escalated_items %}
+      
+      <!-- Search Box -->
+      <div class="mb-3">
+        <input id="escalatedSearch" type="search" class="form-control form-control-sm" placeholder="Search by recipient, equipment, or storekeeper...">
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0" id="escalatedTable">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Recipient Type</th>
+              <th>Recipient ID</th>
+              <th>Recipient Name</th>
+              <th>Equipment</th>
+              <th>Condition</th>
+              <th>Storekeeper</th>
+              <th class="d-none d-sm-table-cell">Storekeeper Notes</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in escalated_items %}
+              {% for damage in item._damage_list %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>
+                  <span class="badge {% if item._recipient_type == 'Student' %}bg-info{% else %}bg-warning{% endif %}">
+                    {{ item._recipient_type }}
+                  </span>
+                </td>
+                <td class="fw-semibold">{{ item._recipient_id }}</td>
+                <td>{{ item._recipient_name }}</td>
+                <td>{{ item.equipment.name if item.equipment else '—' }}</td>
+                <td>
+                  <span class="badge {% if damage.condition == 'Damaged' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                    {{ damage.condition }}
+                  </span>
+                </td>
+                <td>{{ item._storekeeper_name }}</td>
+                <td class="d-none d-sm-table-cell">
+                  <small class="text-muted">{{ item.damage_clearance_notes or '—' }}</small>
+                </td>
+                <td class="text-center">
+                  <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#approveModal"
+                          onclick="setItemData({{ item.id }}, '{{ item._recipient_name }}', '{{ item.equipment.name }}', '{{ damage.condition }}', 'review')">
+                    <i class="bi bi-eye"></i> Review
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="text-muted small mt-2">
+        Total: <strong>{{ escalated_items|length }}</strong> escalated item(s) awaiting admin review
+      </div>
+
+      {% else %}
+      <div class="alert alert-info text-center">
+        No escalated damage or loss clearance items.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Process Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="approveModalLabel">Process Escalated Clearance</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" id="processForm" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="alert alert-warning" role="alert">
+            <strong>Recipient:</strong> <span id="modalRecipient"></span><br>
+            <strong>Equipment:</strong> <span id="modalEquipment"></span><br>
+            <strong>Condition:</strong> <span id="modalCondition"></span>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label"><strong>Decision</strong></label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="action" id="actionClear" value="clear" checked>
+              <label class="form-check-label" for="actionClear">
+                <strong>Clear</strong> - Approve and mark as Repaired/Replaced
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="action" id="actionWaive" value="waive">
+              <label class="form-check-label" for="actionWaive">
+                <strong>Waive</strong> - Waive the escalation (no further action)
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="action" id="actionReject" value="reject">
+              <label class="form-check-label" for="actionReject">
+                <strong>Reject Clearance</strong> - Send back to storekeeper for further action
+              </label>
+            </div>
+          </div>
+
+          <div class="mb-3" id="clearanceStatusDiv">
+            <label for="clearanceStatus" class="form-label"><strong>Clearance Status</strong></label>
+            <select class="form-select" name="clearance_status" id="clearanceStatus">
+              <option value="Repaired">Repaired</option>
+              <option value="Replaced">Replaced</option>
+            </select>
+            <small class="text-muted">Confirm the status for this clearance</small>
+          </div>
+
+          <div class="mb-3">
+            <label for="adminNotes" class="form-label">Admin Notes</label>
+            <textarea class="form-control form-control-sm" name="admin_notes" id="adminNotes" rows="3" placeholder="Add your decision notes..."></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="adminDocument" class="form-label">Upload Document (optional)</label>
+            <input class="form-control form-control-sm" type="file" name="document" id="adminDocument" accept="application/pdf,image/*">
+            <small class="text-muted">Attach any supporting document (PDF, image).</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            <i class="bi bi-check-circle"></i> Process
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .table-hover tbody tr:hover { background-color: #f4f7fb; }
+  .table-sm td, .table-sm th { padding: .5rem .6rem; }
+  
+  #escalatedTable th {
+    border: 1px solid #495057 !important;
+  }
+  
+  #escalatedTable td {
+    border: 1px solid #dee2e6 !important;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const escalatedSearch = document.getElementById('escalatedSearch');
+    const actionClear = document.getElementById('actionClear');
+    const actionWaive = document.getElementById('actionWaive');
+    const actionReject = document.getElementById('actionReject');
+    const clearanceStatusDiv = document.getElementById('clearanceStatusDiv');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Search functionality
+    if (escalatedSearch) {
+      escalatedSearch.addEventListener('input', function() {
+        const q = escalatedSearch.value.trim().toLowerCase();
+        const rows = document.querySelectorAll('#escalatedTable tbody tr');
+        rows.forEach(function(r) {
+          const text = r.textContent.toLowerCase();
+          r.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    }
+
+    // Toggle clearance status based on action
+    actionClear.addEventListener('change', function() {
+      if (this.checked) {
+        clearanceStatusDiv.style.display = 'block';
+        submitBtn.textContent = '✓ Clear';
+        submitBtn.classList.remove('btn-danger');
+        submitBtn.classList.add('btn-success');
+      }
+    });
+
+    actionWaive.addEventListener('change', function() {
+      if (this.checked) {
+        clearanceStatusDiv.style.display = 'none';
+        submitBtn.textContent = '✦ Waive';
+        submitBtn.classList.remove('btn-success');
+        submitBtn.classList.remove('btn-danger');
+        submitBtn.classList.add('btn-warning');
+      }
+    });
+
+    actionReject.addEventListener('change', function() {
+      if (this.checked) {
+        clearanceStatusDiv.style.display = 'none';
+        submitBtn.textContent = '✗ Reject & Return to Storekeeper';
+        submitBtn.classList.remove('btn-success');
+        submitBtn.classList.add('btn-danger');
+      }
+    });
+
+    // Initialize
+    clearanceStatusDiv.style.display = 'block';
+  });
+
+  function setItemData(issueId, recipientName, equipmentName, condition, action) {
+    // Set modal data
+    document.getElementById('modalRecipient').textContent = recipientName;
+    document.getElementById('modalEquipment').textContent = equipmentName;
+    document.getElementById('modalCondition').textContent = condition;
+
+    // Update form action
+    const form = document.getElementById('processForm');
+    form.action = `/admin/escalated-damage/${issueId}`;
+
+    // Set the action (if opened via "Review", don't change radios, let admin choose)
+    if (action === 'clear') {
+      document.getElementById('actionClear').checked = true;
+      document.getElementById('clearanceStatusDiv').style.display = 'block';
+    } else if (action === 'waive') {
+      document.getElementById('actionWaive').checked = true;
+      document.getElementById('clearanceStatusDiv').style.display = 'none';
+    } else if (action === 'reject') {
+      document.getElementById('actionReject').checked = true;
+      document.getElementById('clearanceStatusDiv').style.display = 'none';
+    } else {
+      // 'review' or unknown - leave radios as-is and allow admin to pick
+    }
+  }
+</script>
+
+{% endblock %}

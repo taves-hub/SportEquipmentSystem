@@ -23,63 +23,31 @@
     </div>
   </div>
 
-  <div class="row mt-4">
+  <div class="row text-center mt-4">
     <div class="col-12">
-      <div class="card border-danger shadow-sm">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <h5 class="card-title text-danger">Due Equipment Alerts</h5>
-              <p class="mb-0">{{ due_items|length or 0 }} items due for return (expected date today or earlier)</p>
+      <div class="card shadow-sm p-3 summary d-flex align-items-center justify-content-between">
+        <div>
+          <h5>Damaged &amp; Lost Items</h5>
+          <div class="d-flex gap-4 align-items-center mt-2">
+            <div class="text-start">
+              <div class="text-muted small">Damaged</div>
+              <h2 class="mb-0" style="color: #ffc107;">{{ total_damaged }}</h2>
             </div>
-            <div>
-              <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#dueDetails" aria-expanded="false" aria-controls="dueDetails">Show Details</button>
+            <div class="text-start">
+              <div class="text-muted small">Lost</div>
+              <h2 class="mb-0" style="color: #dc3545;">{{ total_lost }}</h2>
             </div>
           </div>
-
-          <div class="collapse mt-3" id="dueDetails">
-            {% if due_items %}
-            <div class="table-responsive">
-              <table class="table table-sm table-striped small">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Recipient ID</th>
-                    <th>Recipient Name</th>
-                    <th>Email</th>
-                    <th>Phone</th>
-                    <th>Equipment</th>
-                    <th>Qty</th>
-                    <th>Expected Return</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for item in due_items %}
-                    <tr>
-                      <td>{{ loop.index }}</td>
-                      <td>{{ item.staff_payroll or item.student_id }}</td>
-                      <td>{{ (item.staff.name if item.staff else item.student.name if item.student else None) or '—' }}</td>
-                      <td>{{ (item.staff.email if item.staff else item.student.email if item.student else None) or '—' }}</td>
-                      <td>{{ item.student.phone if item.student else '—' }}</td>
-                      <td>{{ item.equipment.name if item.equipment else item.equipment_id }}</td>
-                      <td>{{ item.quantity }}</td>
-                      <td>{{ item.expected_return.strftime('%Y-%m-%d') if item.expected_return else '' }}</td>
-                      <td class="text-end">
-                        <a href="{{ url_for('storekeeper.issued_equipment') }}" class="btn btn-sm btn-outline-primary">View</a>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-            {% else %}
-              <p class="text-muted">No due items found.</p>
-            {% endif %}
-          </div>
+        </div>
+        <div>
+          <a href="{{ url_for('storekeeper.damage_clearance') }}" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-tools"></i> Manage Clearance
+          </a>
         </div>
       </div>
     </div>
   </div>
+
+  {# 'Due Equipment Alerts' card removed as requested #}
 </div>
 {% endblock %}

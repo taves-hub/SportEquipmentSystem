@@ -2,48 +2,109 @@
 {% block content %}
 <div class="container py-4">
   <h3 class="mb-4 text-center">Receipts</h3>
-  <form method="get" class="mb-4">
-    <div class="row g-2 justify-content-center">
-      <div class="col-md-4">
-        <input type="text" name="recipient_id" class="form-control" placeholder="Enter Student ID or Staff Payroll" value="{{ request.args.get('recipient_id', '') }}">
+  
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <!-- Search Box -->
+      <div class="mb-3">
+        <input id="receiptSearch" type="search" class="form-control form-control-sm" placeholder="Search by recipient name, ID, or equipment...">
       </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Search</button>
-      </div>
-    </div>
-  </form>
-  {% if recipient and issues %}
-    <div class="card mb-4">
-      <div class="card-header bg-light">
-        <strong>Receipts for {{ recipient.name }} ({{ recipient_id }})</strong>
-      </div>
-      <div class="card-body p-0">
-        <table class="table table-sm mb-0">
-          <thead class="table-light">
+
+      <!-- Receipts Table -->
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0" id="receiptsTable">
+          <thead class="table-dark">
             <tr>
+              <th>#</th>
               <th>Receipt No</th>
-              <th>Date Issued</th>
+              <th>Recipient Type</th>
+              <th>Recipient ID</th>
+              <th>Recipient Name</th>
               <th>Equipment</th>
               <th>Quantity</th>
-              <th>Action</th>
+              <th>Date Issued</th>
+              <th class="text-center">Action</th>
             </tr>
           </thead>
           <tbody>
-            {% for issue in issues %}
-            <tr>
-              <td>ISS-{{ '%04d' % issue.id }}</td>
-              <td>{{ issue.date_issued.strftime('%d %b %Y, %H:%M') if issue.date_issued else '' }}</td>
-              <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
-              <td>{{ issue.quantity }}</td>
-              <td><a href="{{ url_for('storekeeper.issue_receipt', issue_id=issue.id) }}" class="btn btn-outline-primary btn-sm" target="_blank"><i class="bi bi-receipt"></i> View</a></td>
-            </tr>
-            {% endfor %}
+            {% if receipts %}
+              {% for receipt in receipts %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ receipt.receipt_no }}</td>
+                <td>
+                  {% if receipt.recipient_type == 'Student' %}
+                    <span class="badge bg-info">Student</span>
+                  {% elif receipt.recipient_type == 'Staff' %}
+                    <span class="badge bg-warning">Staff</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Unknown</span>
+                  {% endif %}
+                </td>
+                <td class="fw-semibold">{{ receipt.recipient_id or '—' }}</td>
+                <td>{{ receipt.recipient_name }}</td>
+                <td>
+                  {% for eq in receipt.equipment %}
+                    <div>{{ eq.name }} <small class="text-muted">(x{{ eq.quantity }})</small></div>
+                  {% endfor %}
+                </td>
+                <td class="text-center">{{ receipt.total_qty }}</td>
+                <td>{{ receipt.date_issued.strftime('%d %b %Y') if receipt.date_issued else '—' }}</td>
+                <td class="text-center">
+                  <a href="{{ url_for('storekeeper.issue_receipt', recipient_id=receipt.recipient_id, date=receipt.date_issued.strftime('%Y-%m-%d')) }}" class="btn btn-outline-primary btn-sm" title="View combined receipt">
+                    <i class="bi bi-receipt"></i> View
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="9" class="text-center text-muted">No receipts found.</td>
+              </tr>
+            {% endif %}
           </tbody>
         </table>
       </div>
+
+      <!-- Result count -->
+      {% if receipts %}
+      <div class="text-muted small mt-2">
+        Total: <strong>{{ receipts|length }}</strong> receipt(s)
+      </div>
+      {% endif %}
     </div>
-  {% elif request.args.get('recipient_id') %}
-    <div class="alert alert-warning text-center">No receipts found for ID: {{ request.args.get('recipient_id') }}</div>
-  {% endif %}
+  </div>
 </div>
+
+<style>
+  .table-hover tbody tr:hover { background-color: #f4f7fb; }
+  .table-sm td, .table-sm th { padding: .5rem .6rem; }
+  .card .form-control-sm { max-width: 100%; }
+
+  #receiptsTable th {
+    border: 1px solid #495057 !important;
+  }
+  
+  #receiptsTable td {
+    border: 1px solid #dee2e6 !important;
+  }
+</style>
+
+<script>
+  // Client-side search/filter for receipts table
+  document.addEventListener('DOMContentLoaded', function(){
+    var searchInput = document.getElementById('receiptSearch');
+    if(searchInput){
+      searchInput.addEventListener('input', function(){
+        var q = searchInput.value.trim().toLowerCase();
+        var rows = document.querySelectorAll('#receiptsTable tbody tr');
+        rows.forEach(function(r){
+          var text = r.textContent.toLowerCase();
+          r.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    }
+  });
+</script>
+
 {% endblock %}

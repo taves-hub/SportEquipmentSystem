@@ -3,136 +3,190 @@
 {% block content %}
 <div class="container py-5">
   <h4 class="text-center mb-3">Return Equipment</h4>
-  <div class="card p-4">
-    <div class="mb-4">
-      {% if current_user.get_id().startswith('storekeeper-') %}
-        <form method="get" action="{{ url_for('storekeeper.return_equipment') }}" class="w-100">
-          <label class="form-label">Select Issue</label>
-          <div class="input-group">
-            <input type="text" name="issue_id" class="form-control" placeholder="Issue Reference / Issue ID (search or enter)" value="{{ request.args.get('issue_id','') }}">
-            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+  
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if show_detail %}
+      <!-- DETAILED VIEW: Show all items for selected recipient -->
+      
+      <div class="mb-3">
+        <a href="{{ url_for('storekeeper.return_equipment') }}" class="btn btn-secondary btn-sm">
+          <i class="bi bi-arrow-left"></i> Back to Recipients
+        </a>
+      </div>
+
+      <!-- Search Box -->
+      <div class="mb-3">
+        <input id="returnSearch" type="search" class="form-control form-control-sm" placeholder="Search by equipment or serial...">
+      </div>
+
+      <!-- Return Items Table -->
+      {% if display_items %}
+      <form method="post" id="returnForm">
+        <div class="table-responsive">
+          <table class="table table-hover table-sm align-middle mb-3" id="returnTable">
+            <thead class="table-dark">
+              <tr>
+                <th>Checkbox</th>
+                <th>#</th>
+                <th>Equipment</th>
+                <th>Serial Number</th>
+                <th>Return Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in display_items %}
+              <tr>
+                <td>
+                  <input type="checkbox" name="selected_serials" value="{{ item.issue.id }}:{{ item.serial }}" class="form-check-input item-checkbox">
+                </td>
+                <td>{{ loop.index }}</td>
+                <td>{{ item.equipment_name }}</td>
+                <td>{{ item.serial or '—' }}</td>
+                <td>
+                  <select name="condition_{{ item.issue.id }}_{{ item.serial }}" class="form-select form-select-sm condition-select" disabled>
+                    <option value="">-- Select --</option>
+                    <option value="Good">Good</option>
+                    <option value="Damaged">Damaged</option>
+                    <option value="Lost">Lost</option>
+                  </select>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div>
+            <button type="submit" class="btn btn-success" id="confirm-return" disabled>
+              <i class="bi bi-check-circle"></i> Confirm Return
+            </button>
           </div>
-          <small class="form-text text-muted">Select the issue record to process returns.</small>
-        </form>
+          <div class="text-muted small">
+            Total items: <strong>{{ display_items|length }}</strong>
+          </div>
+        </div>
+      </form>
       {% else %}
-        <form method="get" action="{{ url_for('admin.return_equipment') }}" class="w-50">
-          <div class="input-group input-group-sm">
-            <input type="text" name="recipient_id" class="form-control form-control-sm" placeholder="Enter Student ID or Staff Payroll..." value="{{ recipient_id or '' }}" required>
-            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Search</button>
-          </div>
-        </form>
-      {% endif %}
-      {% if recipient_id %}
-        <div class="mt-2">
-          <a href="{% if current_user.is_authenticated and current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.return_equipment') }}{% else %}{{ url_for('admin.return_equipment') }}{% endif %}" class="btn btn-secondary btn-sm"><i class="bi bi-x-circle"></i> Clear Search</a>
-        </div>
+      <div class="alert alert-info text-center">
+        No items available for return for this recipient.
+      </div>
       {% endif %}
 
-      {% if recipient_id and recipient_name %}
-      <div class="alert alert-info">
-        <strong>{{ recipient_type }}:</strong> {{ recipient_name }} (ID: {{ recipient_id }})
+      {% else %}
+      <!-- GROUPED VIEW: Show recipients with return buttons -->
+      
+      <!-- Search Box -->
+      <div class="mb-3">
+        <input id="recipientSearch" type="search" class="form-control form-control-sm" placeholder="Search by name, ID, or equipment...">
       </div>
-    {% endif %}
-    {% if display_items %}
-      <div class="card mt-4">
-        <div class="card-header bg-light">
-          <h5 class="card-title mb-0">Return Equipment</h5>
-        </div>
-        <div class="card-body">
-          {% set first_item = display_items[0].issue %}
-          {% if first_item.student %}
-            <div class="mb-3">
-              <p><strong>Student:</strong> {{ first_item.student.name }}</p>
-              {% if first_item.student_id %}
-                <p><strong>Student ID:</strong> {{ first_item.student_id }}</p>
-              {% endif %}
-            </div>
-          {% elif first_item.staff %}
-            <div class="mb-3">
-              <p><strong>Staff:</strong> {{ first_item.staff.name }}</p>
-              {% if first_item.staff_payroll %}
-                <p><strong>Payroll:</strong> {{ first_item.staff_payroll }}</p>
-              {% endif %}
-            </div>
-          {% endif %}
 
-          <form method="post" id="returnForm">
-            <div class="mb-3">
-              <h6>Select items to return and specify condition:</h6>
-              <small class="text-muted d-block mb-2">Check each item and select its return condition.</small>
-            </div>
+      {% if display_items %}
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0" id="recipientsTable">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Recipient Type</th>
+              <th>Recipient ID</th>
+              <th>Recipient Name</th>
+              <th>Equipment</th>
+              <th class="text-center">Total Items</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in display_items %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>
+                <span class="badge {% if item.recipient_type == 'Student' %}bg-info{% else %}bg-warning{% endif %}">
+                  {{ item.recipient_type }}
+                </span>
+              </td>
+              <td class="fw-semibold">{{ item.recipient_id }}</td>
+              <td>{{ item.recipient_name }}</td>
+              <td>{{ item.equipment_display }}</td>
+              <td class="text-center">{{ item.total_count }}</td>
+              <td class="text-center">
+                <a href="{{ url_for('storekeeper.return_equipment', return_recipient=item.recipient_id) }}" class="btn btn-outline-primary btn-sm" title="Return equipment">
+                  <i class="bi bi-box-arrow-down"></i> Return
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
 
-            <div class="table-responsive">
-              <table class="table table-hover table-sm align-middle mb-3 small">
-                <thead class="table-dark">
-                  <tr>
-                    <th width="50px"><input type="checkbox" id="select-all" class="form-check-input"></th>
-                    <th>Equipment</th>
-                    <th>Serial Number</th>
-                    <th>Return Condition</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for item in display_items %}
-                    <tr>
-                      <td>
-                        <input type="checkbox" name="selected_serials" value="{{ item.issue.id }}:{{ item.serial }}" class="form-check-input item-checkbox">
-                      </td>
-                      <td>{{ item.equipment_name }}</td>
-                      <td>{{ item.serial or '—' }}</td>
-                      <td>
-                        <select name="condition_{{ item.issue.id }}_{{ item.serial }}" class="form-select form-select-sm condition-select" disabled>
-                          <option value="">-- Select --</option>
-                          <option value="Good">Good</option>
-                          <option value="Damaged">Damaged</option>
-                          <option value="Lost">Lost</option>
-                        </select>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
+      <!-- Result count -->
+      <div class="text-muted small mt-2">
+        Total: <strong>{{ display_items|length }}</strong> recipient(s)
+      </div>
 
-            <div class="d-flex justify-content-between align-items-center mt-3">
-              <div>
-                <button type="submit" class="btn btn-success" id="confirm-return" disabled><i class="bi bi-check-circle"></i> Confirm Return</button>
-                <a href="{{ url_for('storekeeper.return_equipment') }}" class="btn btn-secondary ms-2"><i class="bi bi-x-circle"></i> Clear</a>
-              </div>
-              <div class="text-muted small">
-                Total items: {{ display_items|length }}
-              </div>
-            </div>
-          </form>
-        </div>
+      {% else %}
+      <div class="alert alert-info text-center">
+        No items available for return at this time.
       </div>
-    {% elif request.args.get('issue_id') %}
-      <div class="alert alert-warning">
-        No issued equipment found for Issue ID: {{ request.args.get('issue_id') }}
-      </div>
-    {% elif recipient_id %}
-      <div class="alert alert-warning">
-        No issued equipment found for recipient ID: {{ recipient_id }}
-      </div>
-    {% else %}
-      <div class="alert alert-info">
-        Enter a Student ID or Staff Payroll Number to search for equipment to return.
-      </div>
-    {% endif %}
+      {% endif %}
+
+      {% endif %}
+    </div>
   </div>
 </div>
 
+<style>
+  .table-hover tbody tr:hover { background-color: #f4f7fb; }
+  .table-sm td, .table-sm th { padding: .5rem .6rem; }
+
+  #returnTable th, #recipientsTable th {
+    border: 1px solid #495057 !important;
+  }
+  
+  #returnTable td, #recipientsTable td {
+    border: 1px solid #dee2e6 !important;
+  }
+</style>
+
 <script>
-  // Select all checkbox functionality and condition selection management
   document.addEventListener('DOMContentLoaded', function() {
+    const returnSearch = document.getElementById('returnSearch');
+    const recipientSearch = document.getElementById('recipientSearch');
     const selectAllCheckbox = document.getElementById('select-all');
     const itemCheckboxes = document.querySelectorAll('.item-checkbox');
     const conditionSelects = document.querySelectorAll('.condition-select');
     const confirmButton = document.getElementById('confirm-return');
     const returnForm = document.getElementById('returnForm');
 
-    // Function to update condition select states and button
+    // Search functionality for detailed return view
+    if (returnSearch) {
+      returnSearch.addEventListener('input', function() {
+        const q = returnSearch.value.trim().toLowerCase();
+        const rows = document.querySelectorAll('#returnTable tbody tr');
+        rows.forEach(function(r) {
+          const text = r.textContent.toLowerCase();
+          r.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    }
+
+    // Search functionality for grouped view
+    if (recipientSearch) {
+      recipientSearch.addEventListener('input', function() {
+        const q = recipientSearch.value.trim().toLowerCase();
+        const rows = document.querySelectorAll('#recipientsTable tbody tr');
+        rows.forEach(function(r) {
+          const text = r.textContent.toLowerCase();
+          r.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    }
+
+    // Function to update condition select states and button (only for detailed view)
     function updateUI() {
+      if (!itemCheckboxes.length) return;
+      
       const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
       const checkedCount = checkedBoxes.length;
 
@@ -156,11 +210,13 @@
       }
 
       // Update confirm button
-      confirmButton.disabled = checkedCount === 0;
-      confirmButton.textContent = checkedCount === 0 ? 'Confirm Return' : `Confirm Return (${checkedCount})`;
+      if (confirmButton) {
+        confirmButton.disabled = checkedCount === 0;
+        confirmButton.textContent = checkedCount === 0 ? 'Confirm Return' : `Confirm Return (${checkedCount})`;
+      }
     }
 
-    // Select all functionality
+    // Select all functionality (only for detailed view)
     if (selectAllCheckbox) {
       selectAllCheckbox.addEventListener('change', function() {
         itemCheckboxes.forEach(checkbox => {
@@ -170,48 +226,41 @@
       });
     }
 
-    // Individual checkbox changes
+    // Individual checkbox changes (only for detailed view)
     itemCheckboxes.forEach(checkbox => {
       checkbox.addEventListener('change', updateUI);
     });
 
-    // Form validation before submission
+    // Form validation before submission (only for detailed view)
     if (returnForm) {
       returnForm.addEventListener('submit', function(e) {
-      const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
-      let validationPassed = true;
-      let missingConditions = [];
+        const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+        let validationPassed = true;
+        let missingConditions = [];
 
-      checkedBoxes.forEach((checkbox, index) => {
-        // Find the corresponding condition select
-        const row = checkbox.closest('tr');
-        const conditionSelect = row.querySelector('.condition-select');
+        checkedBoxes.forEach((checkbox, index) => {
+          // Find the corresponding condition select
+          const row = checkbox.closest('tr');
+          const conditionSelect = row.querySelector('.condition-select');
 
-        if (!conditionSelect.value || conditionSelect.value === '') {
-          validationPassed = false;
-          // Get equipment name and serial for error message
-          const equipmentName = row.cells[1].textContent.trim();
-          const serialNumber = row.cells[2].textContent.trim();
-          const itemDesc = serialNumber !== '—' ? `${equipmentName} (${serialNumber})` : equipmentName;
-          missingConditions.push(itemDesc);
+          if (!conditionSelect.value || conditionSelect.value === '') {
+            validationPassed = false;
+            // Get equipment name and serial for error message
+            const equipmentName = row.cells[2].textContent.trim();
+            const serialNumber = row.cells[3].textContent.trim();
+            const itemDesc = serialNumber !== '—' ? `${equipmentName} (${serialNumber})` : equipmentName;
+            missingConditions.push(itemDesc);
+          }
+        });
+
+        if (!validationPassed) {
+          e.preventDefault();
+          alert('Please select a return condition for all selected items:\n\n' + missingConditions.join('\n'));
+          return false;
         }
-      });
-
-      if (!validationPassed) {
-        e.preventDefault();
-        alert('Please select a return condition for all selected items:\n\n' + missingConditions.join('\n'));
-        // Focus on the first empty condition select
-        const firstEmpty = document.querySelector('.item-checkbox:checked').closest('tr').querySelector('.condition-select:not([value]):not([value=""])');
-        if (firstEmpty) {
-          firstEmpty.focus();
-        }
-        return false;
-      }
       });
     }
-
   });
 </script>
 
-</script>
 {% endblock %}

@@ -24,22 +24,18 @@
   <div style="position: relative; z-index: 1;">
 
     <!-- ================= CENTERED HEADER ================= -->
-    <div style="text-align:center; margin-bottom:14px;">
+    <div style="text-align:center; margin-bottom:10px;">
 
       <img
-        src="{{ url_for('static', filename='pictures/uon_logo.jpg') }}"
+        src="{{ url_for('static', filename='uon-logo.png') }}"
         alt="University of Nairobi Logo"
-        style="width:80px; height:auto; margin-bottom:6px;">
+        style="width:150px; height:90px">
 
-      <div style="font-size:18px; font-weight:bold; line-height:1.2;">
-        University of Nairobi
-      </div>
-
-      <div style="font-size:16px; line-height:1.2;">
+      <div style="text-transform:uppercase; font-size:16px; line-height:1.2; margin-top: 0%;">
         Sports Department
       </div>
 
-      <div style="margin-top:4px; font-size:15px; font-weight:bold; color:#0d6efd;">
+      <div style="font-size:15px; font-weight:bold; color:#0d6efd;">
         Equipment Issue Receipt
       </div>
 
@@ -53,10 +49,10 @@
     <div class="mb-2" style="width:100%; max-width:800px; margin:0 auto;">
       <div style="display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:1rem;">
         <div>
-          Receipt No: <span class="text-dark">ISS-{{ '%04d' % issue.id }}</span>
+          Receipt No: <span class="text-dark">ISS-{{ '%04d' % issues[0].id }}</span>
         </div>
         <div>
-          Date Issued: <span class="text-dark">{{ issue.date_issued.strftime('%d %b %Y, %H:%M') if issue.date_issued else '' }}</span>
+          Date Issued: <span class="text-dark">{{ issues[0].date_issued.strftime('%d %b %Y, %H:%M') if issues[0].date_issued else '' }}</span>
         </div>
       </div>
       <hr style="border-top:1.2px solid #0d6efd; margin:6px 0 0 0;">
@@ -65,7 +61,7 @@
 
     <!-- ================= RECIPIENT DETAILS ================= -->
 <div class="mb-3 d-flex justify-content-center" style="page-break-inside:avoid; width:100%; max-width:800px; margin:0 auto;">
-  <div style="width:100%; background:#ffffe0; padding:10px 12px; border-radius:6px;">
+  <div style="width:100%; background:#ffffff; padding:10px 12px; border-radius:6px;">
 
     <div class="fw-bold mb-2" style="font-size:1.05rem;">Issued To</div>
 
@@ -80,19 +76,19 @@
 
       <!-- Row 1 -->
       <div>
-        Name of {{ 'Student' if issue.student else 'Staff' }}:
+        Name of {{ 'Student' if student else 'Staff' }}:
         <span style="border-bottom:1px dotted #333; min-width:200px; display:inline-block; margin-left:6px;">
-          {{ issue.student.name if issue.student else issue.staff.name }}
+          {{ student.name if student else staff.name }}
         </span>
       </div>
 
       <div>
-        {{ 'Course' if issue.student else 'Department' }}:
+        {{ 'Course' if student else 'Department' }}:
         <span style="border-bottom:1px dotted #333; min-width:160px; display:inline-block; margin-left:6px;">
-          {% if issue.student and issue.student.course %}
-            {{ issue.student.course }}
-          {% elif issue.staff and issue.staff.department %}
-            {{ issue.staff.department }}
+          {% if student and student.course %}
+            {{ student.course }}
+          {% elif staff and staff.department %}
+            {{ staff.department }}
           {% else %}
             &nbsp;
           {% endif %}
@@ -103,14 +99,14 @@
       <div>
         Reg/Payroll No:
         <span style="border-bottom:1px dotted #333; min-width:160px; display:inline-block; margin-left:6px;">
-          {{ issue.student_id if issue.student else issue.staff_payroll }}
+          {{ student.id if student else staff.payroll_number }}
         </span>
       </div>
 
       <div>
         Email:
         <span style="border-bottom:1px dotted #333; min-width:200px; display:inline-block; margin-left:6px;">
-          {{ issue.student.email if issue.student else issue.staff.email }}
+          {{ student.email if student else staff.email }}
         </span>
       </div>
 
@@ -118,7 +114,7 @@
       <div>
         Contact:
         <span style="border-bottom:1px dotted #333; min-width:160px; display:inline-block; margin-left:6px;">
-          {{ issue.student.phone if issue.student and issue.student.phone else '' }}
+          {{ student.phone if student and student.phone else '' }}
         </span>
       </div>
 
@@ -140,26 +136,31 @@
           <thead style="background:#0d6efd; color:#fff;">
             <tr>
               <th>Item Name</th>
+              <th>Quantity</th>
               <th>Serial Number</th>
               <th>Condition at Issue</th>
             </tr>
           </thead>
           <tbody>
-            {% if serials and serials|length > 0 %}
-              {% for serial in serials %}
-              <tr>
-                <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
-                <td>{{ serial }}</td>
-                <td>Good</td>
-              </tr>
-              {% endfor %}
-            {% else %}
-              <tr>
-                <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
-                <td>—</td>
-                <td>Good</td>
-              </tr>
-            {% endif %}
+            {% for issue in issues %}
+              {% if issue.serials and issue.serials|length > 0 %}
+                {% for serial in issue.serials %}
+                <tr>
+                  <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
+                  <td class="text-center">1</td>
+                  <td>{{ serial }}</td>
+                  <td>Good</td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
+                  <td class="text-center">{{ issue.quantity }}</td>
+                  <td>—</td>
+                  <td>Good</td>
+                </tr>
+              {% endif %}
+            {% endfor %}
           </tbody>
         </table>
       </div>
@@ -183,7 +184,7 @@
 
         <div class="fw-semibold mb-1">Name:</div>
         <div style="min-height:24px;">
-          {{ issue.student.name if issue.student else issue.staff.name }}
+          {{ student.name if student else staff.name }}
         </div>
 
         <div class="fw-semibold mb-1">Date:</div>
@@ -191,11 +192,10 @@
       </div>
 
       <div class="col-md-6 mb-3">
-        <div class="fw-semibold mb-1">Storekeeper Signature:</div>
-        <div style="height:40px; border-bottom:1.5px solid #333; width:80%; margin-bottom:8px;"></div>
-
-        <div class="fw-semibold mb-1">Name:</div>
-        <div style="min-height:24px;">{{ storekeeper.name }}</div>
+        <div class="fw-semibold mb-1">Issued By:</div>
+        <div style="min-height:24px; margin-bottom:25px;">
+          {{ issuer_name }}
+        </div>
 
         <div class="fw-semibold mb-1">Date:</div>
         <div style="height:20px; border-bottom:1.5px solid #333; width:50%;"></div>

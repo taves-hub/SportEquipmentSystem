@@ -86,5 +86,27 @@
     </div>
   </div>
 
+  <!-- Escalated Damage/Loss Alert -->
+  {% if escalated_count > 0 %}
+  <div class="mb-2">
+    <h4 class="mb-1"><i class="bi bi-exclamation-octagon"></i> Attention Required</h4>
+    <div class="row text-center g-1">
+      <div class="col-md-12">
+        <a href="{{ url_for('admin.escalated_damage') }}" class="card shadow-sm p-3 summary border-left-danger risk-alert risk-pulse" style="text-decoration: none; color: inherit; border-left: 5px solid #dc3545;">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <h5 class="text-danger mb-1"><i class="bi bi-exclamation-triangle"></i> Escalated Damage/Loss Clearance</h5>
+              <p class="mb-0 text-muted">{{ escalated_count }} item(s) awaiting your review from stokekeeper(s)</p>
+            </div>
+            <div>
+              <h2 class="text-danger mb-0">{{ escalated_count }}</h2>
+            </div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
 </div>
 {% endblock %}

@@ -1,8 +1,10 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify, session, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify, session, abort, current_app
 from flask_login import login_required, current_user
 from extensions import db
 from models import Admin, StoreKeeper, Equipment, IssuedEquipment, Clearance, Student, Staff, SatelliteCampus, EquipmentCategory, CampusDistribution
 from datetime import datetime, UTC, timedelta
+import os
+from werkzeug.utils import secure_filename
 import uuid
 from Utils.clearance_integration import get_clearance_status
 import csv
@@ -32,6 +34,36 @@ def _require_admin():
         # if a storekeeper is logged in, redirect them to their dashboard
         from flask import redirect, url_for
         return redirect(url_for('storekeeper.dashboard'))
+
+@admin_bp.route('/api/notifications/unread-count')
+@login_required
+def unread_notifications_count():
+    """API endpoint to get unread notifications count for admin"""
+    from models import Notification
+    unread = Notification.query.filter_by(recipient_role='admin', is_read=False).count()
+    return jsonify({'count': unread})
+
+@admin_bp.route('/api/notifications')
+@login_required
+def get_notifications():
+    """API endpoint to get all unread notifications for admin"""
+    from models import Notification
+    notifs = Notification.query.filter_by(recipient_role='admin', is_read=False).order_by(Notification.created_at.desc()).limit(10).all()
+    return jsonify([
+        {'id': n.id, 'message': n.message, 'url': n.url, 'created_at': n.created_at.isoformat()}
+        for n in notifs
+    ])
+
+@admin_bp.route('/api/notifications/<int:notif_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notif_id):
+    """API endpoint to mark a notification as read"""
+    from models import Notification
+    notif = Notification.query.get(notif_id)
+    if notif:
+        notif.is_read = True
+        db.session.commit()
+    return jsonify({'success': True})
 
 @admin_bp.route('/dashboard')
 @login_required
@@ -117,6 +149,17 @@ def dashboard():
 
     due_count = len(due_items)
 
+    # Get escalated damage/loss clearance items
+    escalated_items = IssuedEquipment.query.filter(
+        IssuedEquipment.damage_clearance_status == 'Escalated'
+    ).order_by(IssuedEquipment.date_returned.desc()).all()
+    
+    escalated_count = len(escalated_items)
+
+    # Get unread notifications count
+    from models import Notification
+    unread_count = Notification.query.filter_by(recipient_role='admin', is_read=False).count()
+
     return render_template('dashboard.html',
                            total_equipment=total_equipment,
                            total_satellite_campuses=total_satellite_campuses,
@@ -128,8 +171,11 @@ def dashboard():
                            total_recipients=total_recipients,
                            due_count=due_count,
                            all_due_items=all_due_items,
+                           escalated_count=escalated_count,
+                           escalated_items=escalated_items,
                            total_distributions_count=total_distributions_count,
-                           total_distributed_quantity=total_distributed_quantity)
+                           total_distributed_quantity=total_distributed_quantity,
+                           unread_notifications=unread_count)
 
 @admin_bp.route('/equipment', methods=['GET', 'POST'])
 @login_required
@@ -955,6 +1001,101 @@ def clearance_manage(student_id):
     return redirect(url_for('admin.clearance_report', student_id=student_id))
 
 
+@admin_bp.route('/clearance/<path:recipient_id>/rollback', methods=['GET', 'POST'])
+@login_required
+def clearance_rollback(recipient_id):
+    """Show rollback UI (GET) and mark selected items for review (POST)."""
+    # Explicit admin-only guard
+    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
+        abort(403)
+
+    recipient_id = (recipient_id or '').strip()
+    if not recipient_id:
+        flash('Missing recipient identifier.', 'danger')
+        return redirect(url_for('admin.clearance_report'))
+
+    # Determine whether recipient is student or staff
+    student = Student.query.get(recipient_id)
+    staff = None if student else Staff.query.get(recipient_id)
+
+    # Find returned items for this recipient
+    returned_items = IssuedEquipment.query.filter(
+        IssuedEquipment.status == 'Returned',
+        db.or_(IssuedEquipment.student_id == recipient_id, IssuedEquipment.staff_payroll == recipient_id)
+    ).order_by(IssuedEquipment.date_returned.desc()).all()
+
+    if request.method == 'GET':
+        recipient_name = student.name if student else (staff.name if staff else 'Unknown')
+        recipient_type = 'Student' if student else ('Staff' if staff else 'Unknown')
+        return render_template('clearance_rollback.html', recipient_id=recipient_id, recipient_name=recipient_name,
+                               recipient_type=recipient_type, items=returned_items)
+
+    # POST: process selected items to mark for review
+    selected = request.form.getlist('item_ids')
+    admin_note = request.form.get('note', '').strip()
+    if not selected:
+        flash('No items selected for rollback review.', 'warning')
+        return redirect(url_for('admin.clearance_report', student_id=recipient_id))
+
+    marked = []
+    notified_storekeepers = set()
+    for sid in selected:
+        try:
+            it = IssuedEquipment.query.get(int(sid))
+        except Exception:
+            it = None
+        if not it:
+            continue
+        # Mark item as needing review
+        it.damage_clearance_status = 'Needs Review'
+        note_prefix = f"[Admin Rollback] {admin_note}" if admin_note else '[Admin Rollback] Marked for review'
+        it.damage_clearance_notes = (it.damage_clearance_notes or '') + '\n' + note_prefix
+        db.session.add(it)
+        marked.append(str(it.id))
+
+        # Collect storekeeper to notify (if we can resolve issued_by)
+        try:
+            sk = StoreKeeper.query.filter_by(payroll_number=it.issued_by).first()
+            if sk:
+                notified_storekeepers.add(sk.id)
+        except Exception:
+            pass
+
+    # Update clearance record to Pending
+    try:
+        clearance = Clearance.query.filter_by(student_id=recipient_id).first()
+        if clearance:
+            clearance.status = 'Pending'
+            clearance.last_updated = datetime.now(UTC)
+            db.session.add(clearance)
+        else:
+            if student:
+                c = Clearance(student_id=recipient_id, status='Pending', last_updated=datetime.now(UTC))
+                db.session.add(c)
+    except Exception:
+        pass
+
+    # Create notifications for affected storekeepers
+    try:
+        from models import Notification
+        for sk_id in notified_storekeepers:
+            notif = Notification(recipient_role='storekeeper', recipient_id=sk_id,
+                                 message=f"Admin marked {len(marked)} item(s) for review for recipient {recipient_id}.",
+                                 url=url_for('storekeeper.damage_clearance'))
+            db.session.add(notif)
+    except Exception:
+        pass
+
+    try:
+        db.session.commit()
+        flash(f'Marked {len(marked)} item(s) for review and rolled back clearance to Pending.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error applying rollback review: ' + str(e), 'danger')
+
+    return redirect(url_for('admin.clearance_report', student_id=recipient_id))
+
+
 @admin_bp.route('/clearance/staff/<path:staff_payroll>/manage', methods=['GET', 'POST'])
 @login_required
 def clearance_manage_staff(staff_payroll):
@@ -1209,6 +1350,7 @@ def issue():
     qty = int(request.form.get('quantity', 1))
     expected_return_str = request.form.get('expected_return')
     serial_numbers = request.form.getlist('serial_numbers')
+    confirm_unreturned = request.form.get('confirm_unreturned') == 'true'
     
     # Validate serial number uniqueness across database
     if serial_numbers:
@@ -1238,13 +1380,31 @@ def issue():
             return redirect(url_for('admin.issue'))
         from Utils.student_checks import has_unreturned_items
         has_unreturned, unreturned_items = has_unreturned_items(student_id)
-        if has_unreturned:
-            items_list = ", ".join([
-                f"{item.equipment.name} (Due: {item.expected_return.strftime('%Y-%m-%d') if item.expected_return else 'No due date'})"
-                for item in unreturned_items
-            ])
-            flash(f'Student has unreturned items: {items_list}. Please return these items first.', 'danger')
-            return redirect(url_for('admin.issue'))
+        if has_unreturned and not confirm_unreturned:
+            # Parse serial numbers for each unreturned item
+            for item in unreturned_items:
+                serials = []
+                if item.serial_numbers:
+                    try:
+                        serials = json.loads(item.serial_numbers)
+                    except Exception:
+                        serials = []
+                elif item.equipment and getattr(item.equipment, 'serial_number', None):
+                    serials = [item.equipment.serial_number]
+                item.serials = serials
+            equipment = Equipment.query.filter_by(is_active=True).order_by(Equipment.name).all()
+            issued = IssuedEquipment.query.order_by(IssuedEquipment.date_issued.desc()).all()
+            # Persist all original form data for modal confirmation
+            original_form = request.form.to_dict(flat=False)
+            return render_template('issue.html',
+                equipment=equipment,
+                issued=issued,
+                show_unreturned_modal=True,
+                unreturned_items=unreturned_items,
+                student_name=student_name,
+                student_id=student_id,
+                original_form=original_form
+            )
     elif person_type == 'staff':
         if not staff_payroll or not staff_name or not staff_email:
             flash('Missing required staff fields.', 'danger')
@@ -1339,7 +1499,74 @@ def issue():
     eq.quantity = eq.quantity - qty
     db.session.commit()
     flash('Equipment issued successfully.', 'success')
-    return redirect(url_for('admin.issue'))
+    # Redirect to combined receipt for this recipient
+    recipient_id = student_id if person_type == 'student' else staff_payroll
+    return redirect(url_for('admin.issue_receipt', recipient_id=recipient_id))
+
+@admin_bp.route('/issue-receipt/<int:issue_id>')
+@admin_bp.route('/issue-receipt/recipient/<path:recipient_id>')
+@login_required
+def issue_receipt(issue_id=None, recipient_id=None):
+    """Show receipt for issued equipment. Can show single issue by ID or all issues for a recipient today."""
+    if issue_id:
+        # Legacy: single issue by ID
+        issue = IssuedEquipment.query.get_or_404(issue_id)
+        issues = [issue]
+        recipient_key = issue.student_id or issue.staff_payroll
+    elif recipient_id:
+        # Show all issues for this recipient for a given date (query param `date=YYYY-MM-DD`) or for today by default
+        from datetime import datetime, timedelta
+        date_str = request.args.get('date')
+        if date_str:
+            try:
+                day = datetime.strptime(date_str, '%Y-%m-%d')
+                day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+                day_end = day_start + timedelta(days=1)
+            except Exception:
+                day_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                day_end = day_start + timedelta(days=1)
+        else:
+            day_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+
+        issues = IssuedEquipment.query.filter(
+            db.or_(
+                IssuedEquipment.student_id == recipient_id,
+                IssuedEquipment.staff_payroll == recipient_id
+            ),
+            IssuedEquipment.date_issued >= day_start,
+            IssuedEquipment.date_issued < day_end
+        ).order_by(IssuedEquipment.date_issued.desc()).all()
+        if not issues:
+            flash('No issues found for this recipient on the selected date.', 'warning')
+            return redirect(url_for('admin.issue'))
+        recipient_key = recipient_id
+    else:
+        abort(400)
+    
+    # Get recipient info (student or staff)
+    student = Student.query.filter_by(id=recipient_key).first() if len(recipient_key) < 20 else None
+    staff = Staff.query.filter_by(payroll_number=recipient_key).first() if not student else None
+    
+    # Get issuer name
+    issuer_name = 'Unknown'
+    if issues and issues[0].issued_by:
+        if isinstance(current_user, Admin):
+            issuer_name = current_user.username
+        else:
+            issuer_name = issues[0].issued_by
+    
+    # Parse serials for each issue
+    for issue in issues:
+        serials = []
+        if issue.serial_numbers:
+            try:
+                serials = json.loads(issue.serial_numbers)
+            except Exception:
+                serials = []
+        issue.serials = serials
+    
+    return render_template('issue_receipt.html', issues=issues, student=student, staff=staff, issuer_name=issuer_name)
 
 @admin_bp.route('/return/<int:issue_id>', methods=['GET', 'POST'])
 @login_required
@@ -1350,12 +1577,16 @@ def return_item(issue_id):
     """
     issue = IssuedEquipment.query.get_or_404(issue_id)
     
-    # If already returned, redirect with message
+    # Allow returns for 'Issued' and 'Partial Return' statuses
     if issue.status == 'Returned':
         flash('This item has already been returned.', 'warning')
         return redirect(url_for('admin.issued_equipment'))
+    
+    if issue.status not in ('Issued', 'Partial Return'):
+        flash('This item cannot be returned in its current status.', 'warning')
+        return redirect(url_for('admin.issued_equipment'))
 
-    # Parse serial numbers
+    # Parse serial numbers and filter out already-returned ones
     serials = []
     if issue.serial_numbers:
         try:
@@ -1363,63 +1594,136 @@ def return_item(issue_id):
         except:
             serials = []
 
+    # Filter out already-returned serials
+    already_returned = set()
+    if issue.return_conditions:
+        try:
+            cond_data = json.loads(issue.return_conditions)
+            if isinstance(cond_data, dict) and 'conditions' in cond_data:
+                already_returned = set(cond_data.get('conditions', {}).keys())
+            elif isinstance(cond_data, dict):
+                already_returned = set(cond_data.keys()) - {'all', 'quantity'}
+        except:
+            pass
+    
+    # Filter serials to show only those not yet returned
+    remaining_serials = [s for s in serials if s not in already_returned]
+
     if request.method == 'GET':
-        return render_template('return_form.html', issue=issue, serials=serials)
+        # If no serials remain and quantity is 0 for non-serial, show message
+        if not remaining_serials and issue.quantity <= 0:
+            flash('All items for this issue have already been returned.', 'info')
+            return redirect(url_for('admin.issued_equipment'))
+        
+        return render_template('return_form.html', issue=issue, serials=remaining_serials)
 
     # Handle POST - process return
     returned_serials = request.form.getlist('returned_serials')
-    
-    # Validate serial numbers if present
+
+    # Get associated equipment record
+    equipment = Equipment.query.get_or_404(issue.equipment_id)
+
+    # Support partial serial returns with quantities: returned_serials may be a subset of serials
     if serials:
-        if set(returned_serials) != set(serials):
-            flash('Please check all serial numbers of the items being returned.', 'danger')
+        if not returned_serials:
+            flash('No serials selected for return.', 'warning')
             return redirect(url_for('admin.return_item', issue_id=issue_id))
+
+        new_conditions = {}
+        new_quantities = {}
         
-        # Collect conditions per serial
-        conditions = {}
         for serial in returned_serials:
-            condition = request.form.get(f'condition_{serial}')
-            if not condition or condition not in ('Good', 'Damaged', 'Lost'):
+            cond = request.form.get(f'condition_{serial}')
+            if not cond or cond not in ('Good', 'Damaged', 'Lost'):
                 flash(f'Please select a valid return condition for serial number {serial}.', 'danger')
                 return redirect(url_for('admin.return_item', issue_id=issue_id))
-            conditions[serial] = condition
+            
+            # Each serial counts as 1 item
+            new_conditions[serial] = cond
+            new_quantities[serial] = 1
+
+        # Merge with any existing return conditions and quantities
+        existing_conditions = {}
+        existing_quantities = {}
+        if issue.return_conditions:
+            try:
+                cond_data = json.loads(issue.return_conditions)
+                # Handle both old format (conditions only) and new format (with quantities)
+                if isinstance(cond_data, dict) and 'conditions' in cond_data:
+                    existing_conditions = cond_data.get('conditions', {})
+                    existing_quantities = cond_data.get('quantities', {})
+                else:
+                    existing_conditions = cond_data
+            except:
+                existing_conditions = {}
+
+        # Update issue.return_conditions with merged data
+        existing_conditions.update(new_conditions)
+        existing_quantities.update(new_quantities)
+        issue.return_conditions = json.dumps({
+            'conditions': existing_conditions,
+            'quantities': {k: v for k, v in existing_quantities.items()}
+        })
+
+        # Determine status based on return completeness
+        if len(existing_conditions) >= len(serials):
+            # All serials have been returned
+            print(f"DEBUG: All returned. len(conditions)={len(existing_conditions)}, len(serials)={len(serials)}")
+            issue.status = 'Returned'
+            issue.date_returned = datetime.now(UTC)
+        else:
+            # Some but not all serials have been returned
+            print(f"DEBUG: Partial. len(conditions)={len(existing_conditions)}, len(serials)={len(serials)}, conditions={existing_conditions.keys()}, serials={serials}")
+            issue.status = 'Partial Return'
+            # Don't set date_returned yet
+
+        # Update equipment counts based on newly returned serials with quantities
+        good_count = sum(qty for serial, qty in new_quantities.items() if new_conditions[serial] == 'Good')
+        damaged_count = sum(qty for serial, qty in new_quantities.items() if new_conditions[serial] == 'Damaged')
+        lost_count = sum(qty for serial, qty in new_quantities.items() if new_conditions[serial] == 'Lost')
+
     else:
-        # For non-serial items, use single condition
+        # Non-serial items: support partial quantity returns
         condition = request.form.get('condition')
         if not condition or condition not in ('Good', 'Damaged', 'Lost'):
             flash('Please select a valid return condition.', 'danger')
             return redirect(url_for('admin.return_item', issue_id=issue_id))
-        conditions = condition  # For backward compatibility, but since we changed to JSON, perhaps always JSON
 
-    # Get associated equipment record
-    equipment = Equipment.query.get_or_404(issue.equipment_id)
-    
-    # Update issue record
-    issue.status = 'Returned'
-    if serials:
-        issue.return_conditions = json.dumps(conditions)
-    else:
-        issue.return_conditions = json.dumps({'all': condition})
-    issue.date_returned = datetime.now(UTC)
+        # Get quantity to return (default to total issue quantity)
+        try:
+            qty_to_return = int(request.form.get('quantity_all', issue.quantity))
+            if qty_to_return < 0:
+                qty_to_return = issue.quantity
+            if qty_to_return > issue.quantity:
+                qty_to_return = issue.quantity
+        except:
+            qty_to_return = issue.quantity
 
-    # Update equipment counts based on conditions
-    if serials:
-        good_count = sum(1 for c in conditions.values() if c == 'Good')
-        damaged_count = sum(1 for c in conditions.values() if c == 'Damaged')
-        lost_count = sum(1 for c in conditions.values() if c == 'Lost')
-    else:
+        # Only mark as fully returned if returning entire quantity
+        if qty_to_return >= issue.quantity:
+            issue.status = 'Returned'
+            issue.date_returned = datetime.now(UTC)
+            return_qty = issue.quantity
+        else:
+            # Partial return: update quantity in issue to reflect remaining items
+            issue.quantity -= qty_to_return
+            issue.status = 'Partial Return'
+            return_qty = qty_to_return
+        
+        issue.return_conditions = json.dumps({'all': condition, 'quantity': return_qty})
+
         if condition == 'Good':
-            good_count = issue.quantity
+            good_count = qty_to_return
             damaged_count = 0
             lost_count = 0
         elif condition == 'Damaged':
             good_count = 0
-            damaged_count = issue.quantity
+            damaged_count = qty_to_return
             lost_count = 0
         else:
             good_count = 0
             damaged_count = 0
-            lost_count = issue.quantity
+            lost_count = qty_to_return
 
     equipment.quantity += good_count
     equipment.damaged_count += damaged_count
@@ -1439,67 +1743,28 @@ def return_item(issue_id):
 @admin_bp.route('/issued-equipment')
 @login_required
 def issued_equipment():
-    # Group issued equipment by recipient to eliminate redundancy
-    from collections import defaultdict
-    from datetime import datetime
-
-    # Get all issued equipment
+    # Get all issued equipment with storekeeper and campus information
     all_issued = IssuedEquipment.query.order_by(IssuedEquipment.date_issued.desc()).all()
-
-    # Group by recipient
-    recipient_groups = defaultdict(list)
-    for issue in all_issued:
-        recipient_key = issue.student_id or issue.staff_payroll
-        if recipient_key:
-            recipient_groups[recipient_key].append(issue)
-
-    # Create aggregated records
-    aggregated_issued = []
-    for recipient_key, issues in recipient_groups.items():
-        # Find the most recent issue for this recipient
-        most_recent = max(issues, key=lambda x: x.date_issued or datetime.min)
-
-        # Calculate totals
-        total_quantity = sum(issue.quantity for issue in issues)
-        has_outstanding = any(issue.status == 'Issued' for issue in issues)
-
-        # Collect all equipment names
-        equipment_names = []
-        seen_equipment = set()
-        for issue in issues:
-            eq_name = issue.equipment.name if issue.equipment else str(issue.equipment_id)
-            if eq_name not in seen_equipment:
-                equipment_names.append(eq_name)
-                seen_equipment.add(eq_name)
-
-        equipment_display = ', '.join(equipment_names) if len(equipment_names) <= 3 else f"{', '.join(equipment_names[:3])}, +{len(equipment_names)-3} more"
-
-        # Create a representative issue object with aggregated data
-        class AggregatedIssue:
-            def __init__(self, representative_issue, total_quantity, equipment_display, has_outstanding):
-                self.student = representative_issue.student
-                self.staff = representative_issue.staff
-                self.student_id = representative_issue.student_id
-                self.staff_payroll = representative_issue.staff_payroll
-                self.equipment = representative_issue.equipment  # Keep first equipment for compatibility
-                self.equipment_display = equipment_display
-                self.quantity = total_quantity
-                self.date_issued = most_recent.date_issued
-                self.issued_by = most_recent.issued_by
-                self.expected_return = most_recent.expected_return
-                self.status = 'Issued' if has_outstanding else 'Returned'
-                self.id = representative_issue.id  # Keep an ID for return functionality
-
-        aggregated_issue = AggregatedIssue(most_recent, total_quantity, equipment_display, has_outstanding)
-        aggregated_issued.append(aggregated_issue)
-
-    # Sort by most recent issue date
-    aggregated_issued.sort(key=lambda x: x.date_issued or datetime.min, reverse=True)
+    
+    # Enrich each issued item with storekeeper campus information
+    for item in all_issued:
+        if item.issued_by:
+            # Get the storekeeper who issued this equipment
+            storekeeper = StoreKeeper.query.filter_by(payroll_number=item.issued_by).first()
+            if storekeeper:
+                item._storekeeper_name = storekeeper.full_name
+                item._campus_name = storekeeper.campus.name if storekeeper.campus else 'Unknown'
+            else:
+                item._storekeeper_name = item.issued_by
+                item._campus_name = 'Unknown'
+        else:
+            item._storekeeper_name = '—'
+            item._campus_name = '—'
 
     # Fetch campus distributions
     distributions = CampusDistribution.query.order_by(CampusDistribution.date_distributed.desc()).all()
 
-    return render_template('issued_equipment.html', issued=aggregated_issued, distributions=distributions)
+    return render_template('issued_equipment.html', issued=all_issued, distributions=distributions)
 
 
 @admin_bp.route('/api/recipient-autocomplete')
@@ -2190,3 +2455,110 @@ def deactivate_storekeeper(user_id):
         flash(f'Storekeeper "{storekeeper.full_name}" has been deactivated.', 'success')
     
     return redirect(url_for('admin.user_management'))
+
+@admin_bp.route('/escalated-damage')
+@login_required
+def escalated_damage():
+    """View all escalated damage/loss clearance items"""
+    escalated_items = IssuedEquipment.query.filter(
+        IssuedEquipment.damage_clearance_status == 'Escalated'
+    ).order_by(IssuedEquipment.date_returned.desc()).all()
+    
+    # Enrich items with related data
+    for item in escalated_items:
+        item._recipient_name = item.student.name if item.student else (item.staff.name if item.staff else 'Unknown')
+        item._recipient_type = 'Student' if item.student else 'Staff'
+        item._recipient_id = item.student_id or item.staff_payroll
+        
+        # Get storekeeper info
+        storekeeper = StoreKeeper.query.filter_by(payroll_number=item.issued_by).first()
+        item._storekeeper_name = storekeeper.full_name if storekeeper else item.issued_by
+        
+        # Parse damage items
+        damage_list = []
+        if item.return_conditions:
+            try:
+                conditions = json.loads(item.return_conditions)
+                for serial, condition in conditions.items():
+                    if condition in ('Damaged', 'Lost'):
+                        damage_list.append({
+                            'serial': serial,
+                            'condition': condition
+                        })
+            except:
+                pass
+        item._damage_list = damage_list
+    
+    return render_template('escalated_damage.html', escalated_items=escalated_items)
+
+
+@admin_bp.route('/escalated-damage/<int:issue_id>', methods=['POST'])
+@login_required
+def process_escalated_damage(issue_id):
+    """Process escalated damage/loss clearance - approve or reject"""
+    issue = IssuedEquipment.query.get_or_404(issue_id)
+    
+    if issue.damage_clearance_status != 'Escalated':
+        flash('This item is not escalated.', 'warning')
+        return redirect(url_for('admin.escalated_damage'))
+    
+    # Accept files and save if present
+    action = request.form.get('action')
+    admin_notes = request.form.get('admin_notes', '').strip()
+    uploaded = request.files.get('document')
+    if uploaded and uploaded.filename:
+        filename = secure_filename(uploaded.filename)
+        upload_dir = os.path.join(current_app.root_path, 'uploads', 'escalations')
+        os.makedirs(upload_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        saved_name = f"issue_{issue_id}_{timestamp}_{filename}"
+        saved_path = os.path.join(upload_dir, saved_name)
+        uploaded.save(saved_path)
+        # store file reference in notes
+        admin_notes = (admin_notes + '\n' if admin_notes else '') + f'Attached document: uploads/escalations/{saved_name}'
+        # also store structured document path in the issue record
+        try:
+            issue.damage_clearance_document = f'uploads/escalations/{saved_name}'
+        except Exception:
+            pass
+
+    if action == 'clear':
+        # Clear the escalated issue - mark as Repaired/Replaced based on admin input
+        clearance_status = request.form.get('clearance_status', 'Repaired')
+        if clearance_status not in ('Repaired', 'Replaced'):
+            clearance_status = 'Repaired'
+
+        issue.damage_clearance_status = clearance_status
+        issue.damage_clearance_notes = f"[Storekeeper] {issue.damage_clearance_notes or ''}\n[Admin Cleared] {admin_notes}" if admin_notes else issue.damage_clearance_notes
+        db.session.commit()
+        flash('Damage clearance processed (cleared). Recipient can now clear.', 'success')
+
+    elif action == 'waive':
+        # Waive the escalated issue (forgiving the charge / no action required)
+        issue.damage_clearance_status = 'Waived'
+        issue.damage_clearance_notes = f"[Storekeeper] {issue.damage_clearance_notes or ''}\n[Admin Waived] {admin_notes}" if admin_notes else issue.damage_clearance_notes
+        db.session.commit()
+        flash('Escalated issue waived by admin.', 'success')
+
+    elif action == 'reject':
+        # Reject clearance - send back to storekeeper for further action
+        issue.damage_clearance_status = 'Pending'  # Reset to pending for storekeeper to reconsider
+        issue.damage_clearance_notes = f"{issue.damage_clearance_notes or ''}\n[Admin Rejected] {admin_notes}"
+        # Create a notification for the originating storekeeper (if known)
+        try:
+            from models import Notification, StoreKeeper
+            storekeeper = StoreKeeper.query.filter_by(payroll_number=issue.issued_by).first()
+            if storekeeper:
+                notif = Notification(recipient_role='storekeeper', recipient_id=storekeeper.id,
+                                     message=f"Admin rejected clearance for issue {issue.id}.",
+                                     url=url_for('storekeeper.damage_clearance'))
+                db.session.add(notif)
+        except Exception:
+            pass
+        db.session.commit()
+        flash('Damage clearance rejected. Sent back to storekeeper.', 'info')
+
+    else:
+        flash('Invalid action.', 'danger')
+    
+    return redirect(url_for('admin.escalated_damage'))

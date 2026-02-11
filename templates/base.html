@@ -32,13 +32,22 @@
       left: 0;
       right: 0;
       z-index: 1030;
-      width: 100%;
+      width: calc(100% - 220px);
+      margin-left: 220px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      transition: margin-left 0.3s ease, width 0.3s ease;
+    }
+    .navbar.collapsed {
+      width: calc(100% - 70px);
+      margin-left: 70px;
+    }
+    @media (max-width: 767px) {
+      .navbar { width: 100%; margin-left: 0; }
     }
     /* Left sidebar for navigation */
     .sidebar {
       position: fixed;
-      top: 56px; /* below navbar */
+      top: 0;
       bottom: 0;
       left: 0;
       width: 220px;
@@ -46,31 +55,95 @@
       background: var(--primary);
       border-right: 1px solid rgba(0,0,0,0.12);
       overflow-y: auto;
+      overflow-x: visible;
       color: var(--text-on-primary);
+      transition: width 0.3s ease;
+      z-index: 1020;
+    }
+    .sidebar.collapsed {
+      width: 70px;
     }
     .sidebar .nav-link {
       color: var(--text-on-primary);
       padding: 0.45rem 0.5rem;
       display: flex;
       align-items: center;
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+    .sidebar.collapsed .nav-link {
+      justify-content: center;
+      padding: 0.45rem 0.25rem;
     }
     .sidebar .nav-link .bi {
       font-size: 1.05rem;
       margin-right: 0.6rem;
       opacity: 0.95;
+      flex-shrink: 0;
+    }
+    .sidebar.collapsed .nav-link .bi {
+      margin-right: 0;
+    }
+    .sidebar .nav-link span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sidebar.collapsed .nav-link span {
+      display: none;
     }
     .sidebar .nav-link:hover { background: rgba(255,255,255,0.03); color: var(--text-on-primary); text-decoration: none; }
     .sidebar .collapse .nav-link { padding-left: 1.25rem; font-size: 0.95rem }
+    .sidebar.collapsed .collapse .nav-link { padding-left: 0.25rem; }
     .sidebar .collapse { background: rgba(255,255,255,0.02); border-radius:4px; margin-bottom:0.25rem }
+    .sidebar.collapsed .collapse {
+      position: absolute;
+      left: 70px;
+      top: 0;
+      width: 150px;
+      display: none;
+      background: rgba(0,0,0,0.2);
+      border-radius: 4px;
+      min-width: 150px;
+    }
+    /* Toggle button that sits on the sidebar edge */
+    .sidebar-toggle {
+      position: absolute;
+      top: 10px;
+      right: 8px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      color: #333333;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      border: none;
+      z-index: 1035;
+      transition: transform 0.2s ease, right 0.2s ease;
+      overflow: visible;
+    }
+    .sidebar.collapsed .sidebar-toggle {
+      right: 8px;
+    }
     .main-with-sidebar {
       margin-left: 220px;
       padding: 1.5rem;
+      transition: margin-left 0.3s ease;
+    }
+    .main-with-sidebar.collapsed {
+      margin-left: 70px;
     }
     /* Ensure flash/alert messages are not hidden behind the fixed sidebar */
     .flash-container {
       margin-left: 220px;
       z-index: 1040; /* above sidebar but below navbar (navbar:1030) */
       position: relative;
+      transition: margin-left 0.3s ease;
+    }
+    .flash-container.collapsed {
+      margin-left: 70px;
     }
     @media (max-width: 767px) {
       .sidebar { position: static; width: 100%; height: auto; border-right: none; }
@@ -84,11 +157,23 @@
     <nav class="navbar navbar-expand-lg navbar-light navbar-primary">
   <div class="container">
     <a class="navbar-brand d-flex align-items-center" href="{% if current_user.get_id().startswith('storekeeper-') %}{{ url_for('storekeeper.dashboard') }}{% else %}{{ url_for('admin.dashboard') }}{% endif %}">
-      <img src="{{ url_for('static', filename='uon-logo.png') }}" alt="UoN Logo" style="height: 40px; margin-right: 0.75rem;">
       <span>Sports System</span>
     </a>
     <div class="collapse navbar-collapse">
       <ul class="navbar-nav ms-auto">
+        {# Notification Bell #}
+        <li class="nav-item dropdown me-3">
+          <a class="nav-link" href="#" id="notificationBell" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-bell"></i>
+            <span class="badge bg-danger position-absolute top-0 start-100 translate-middle" id="notifBadge" style="display:none;">0</span>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationBell" style="width: 350px; max-height: 400px; overflow-y: auto;">
+            <div class="dropdown-header">Notifications</div>
+            <div id="notificationList"></div>
+            <div class="dropdown-divider" id="notifDivider"></div>
+            <a class="dropdown-item text-center text-muted small" href="#">No new notifications</a>
+          </div>
+        </li>
         {# Compact user menu: profile + logout, styled like sidebar #}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -116,42 +201,43 @@
   {% endif %}
   {% endwith %}
   
-  <div class="sidebar d-none d-md-block">
+  <div class="sidebar">
+    <button id="sidebarToggle" class="sidebar-toggle" title="Toggle sidebar"><i class="bi bi-list"></i></button>
     {% if current_user.is_authenticated %}
       <nav class="nav flex-column">
         {% if current_user.get_id().startswith('storekeeper-') %}
-          <a class="nav-link" href="{{ url_for('storekeeper.dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+          <a class="nav-link" href="{{ url_for('storekeeper.dashboard') }}" title="Dashboard"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
           {% set sk_equipment_endpoints = ['storekeeper.equipment', 'storekeeper.issue', 'storekeeper.issued_equipment'] %}
           {% set is_equipment_section = request.endpoint in sk_equipment_endpoints %}
-          <a class="nav-link" data-bs-toggle="collapse" href="#skEquipmentCollapse" role="button" aria-expanded="{{ 'true' if is_equipment_section else 'false' }}" aria-controls="skEquipmentCollapse">
-            <i class="bi bi-box-seam"></i> Equipment
+          <a class="nav-link" data-bs-toggle="collapse" href="#skEquipmentCollapse" role="button" aria-expanded="{{ 'true' if is_equipment_section else 'false' }}" aria-controls="skEquipmentCollapse" title="Equipment">
+            <i class="bi bi-box-seam"></i> <span>Equipment</span>
           </a>
           <div class="collapse {% if is_equipment_section %}show{% endif %}" id="skEquipmentCollapse">
             <nav class="nav flex-column ms-3">
-              <a class="nav-link {% if request.endpoint == 'storekeeper.equipment' %}active{% endif %}" href="{{ url_for('storekeeper.equipment') }}"><i class="bi bi-list-ul"></i> View</a>
-              <a class="nav-link {% if request.endpoint == 'storekeeper.issue' %}active{% endif %}" href="{{ url_for('storekeeper.issue') }}"><i class="bi bi-send"></i> Issue</a>
-              <a class="nav-link {% if request.endpoint == 'storekeeper.issued_equipment' %}active{% endif %}" href="{{ url_for('storekeeper.issued_equipment') }}"><i class="bi bi-journal-check"></i> Issued</a>
+              <a class="nav-link {% if request.endpoint == 'storekeeper.equipment' %}active{% endif %}" href="{{ url_for('storekeeper.equipment') }}" title="View"><i class="bi bi-list-ul"></i> <span>View</span></a>
+              <a class="nav-link {% if request.endpoint == 'storekeeper.issue' %}active{% endif %}" href="{{ url_for('storekeeper.issue') }}" title="Issue"><i class="bi bi-send"></i> <span>Issue</span></a>
+              <a class="nav-link {% if request.endpoint == 'storekeeper.issued_equipment' %}active{% endif %}" href="{{ url_for('storekeeper.issued_equipment') }}" title="Issued"><i class="bi bi-journal-check"></i> <span>Issued</span></a>
             </nav>
           </div>
-          <a class="nav-link" href="{{ url_for('storekeeper.return_equipment') }}"><i class="bi bi-box-arrow-in-left"></i> Return</a>
-          <a class="nav-link" href="{{ url_for('storekeeper.clearance_report') }}"><i class="bi bi-check-circle"></i> Clearance</a>
-          <a class="nav-link" href="{{ url_for('storekeeper.receipts') }}"><i class="bi bi-receipt"></i> Receipts</a>
+          <a class="nav-link" href="{{ url_for('storekeeper.return_equipment') }}" title="Return"><i class="bi bi-box-arrow-in-left"></i> <span>Return</span></a>
+          <a class="nav-link" href="{{ url_for('storekeeper.clearance_report') }}" title="Clearance"><i class="bi bi-check-circle"></i> <span>Clearance</span></a>
+          <a class="nav-link" href="{{ url_for('storekeeper.receipts') }}" title="Receipts"><i class="bi bi-receipt"></i> <span>Receipts</span></a>
         {% else %}
-          <a class="nav-link" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2"></i>Dashboard</a>
+          <a class="nav-link" href="{{ url_for('admin.dashboard') }}" title="Dashboard"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
           {% set admin_equipment_endpoints = ['admin.equipment', 'admin.distribute_to_campus', 'admin.view_distributions', 'admin.issued_equipment'] %}
           {% set is_admin_equipment_section = request.endpoint in admin_equipment_endpoints %}
-          <a class="nav-link" data-bs-toggle="collapse" href="#navEquipmentCollapse" role="button" aria-expanded="{{ 'true' if is_admin_equipment_section else 'false' }}" aria-controls="navEquipmentCollapse"><i class="bi bi-box-seam"></i>Equipment</a>
+          <a class="nav-link" data-bs-toggle="collapse" href="#navEquipmentCollapse" role="button" aria-expanded="{{ 'true' if is_admin_equipment_section else 'false' }}" aria-controls="navEquipmentCollapse" title="Equipment"><i class="bi bi-box-seam"></i> <span>Equipment</span></a>
           <div class="collapse {% if is_admin_equipment_section %}show{% endif %}" id="navEquipmentCollapse">
             <nav class="nav flex-column ms-3">
-              <a class="nav-link {% if request.endpoint == 'admin.equipment' %}active{% endif %}" href="{{ url_for('admin.equipment') }}"><i class="bi bi-list-ul"></i>Equipment</a>
-              <a class="nav-link {% if request.endpoint == 'admin.distribute_to_campus' %}active{% endif %}" href="{{ url_for('admin.distribute_to_campus') }}"><i class="bi bi-send"></i>Distribute to Campus</a>
-              <a class="nav-link {% if request.endpoint == 'admin.view_distributions' %}active{% endif %}" href="{{ url_for('admin.view_distributions') }}"><i class="bi bi-eye"></i>View Distributions</a>
-              <a class="nav-link {% if request.endpoint == 'admin.issued_equipment' %}active{% endif %}" href="{{ url_for('admin.issued_equipment') }}"><i class="bi bi-journal-check"></i>Issued</a>
+              <a class="nav-link {% if request.endpoint == 'admin.equipment' %}active{% endif %}" href="{{ url_for('admin.equipment') }}" title="Equipment"><i class="bi bi-list-ul"></i> <span>Equipment</span></a>
+              <a class="nav-link {% if request.endpoint == 'admin.distribute_to_campus' %}active{% endif %}" href="{{ url_for('admin.distribute_to_campus') }}" title="Distribute"><i class="bi bi-send"></i> <span>Distribute</span></a>
+              <a class="nav-link {% if request.endpoint == 'admin.view_distributions' %}active{% endif %}" href="{{ url_for('admin.view_distributions') }}" title="Distributions"><i class="bi bi-eye"></i> <span>Distributions</span></a>
+              <a class="nav-link {% if request.endpoint == 'admin.issued_equipment' %}active{% endif %}" href="{{ url_for('admin.issued_equipment') }}" title="Issued"><i class="bi bi-journal-check"></i> <span>Issued</span></a>
             </nav>
           </div>
-          <a class="nav-link" href="{{ url_for('admin.clearance_report') }}"><i class="bi bi-check-circle"></i> Clearance</a>
-          <a class="nav-link" href="{{ url_for('admin.reports') }}"><i class="bi bi-bar-chart"></i> Reports</a>
-          <a class="nav-link" href="{{ url_for('admin.user_management') }}"><i class="bi bi-people"></i> User Management</a>
+          <a class="nav-link" href="{{ url_for('admin.clearance_report') }}" title="Clearance"><i class="bi bi-check-circle"></i> <span>Clearance</span></a>
+          <a class="nav-link" href="{{ url_for('admin.reports') }}" title="Reports"><i class="bi bi-bar-chart"></i> <span>Reports</span></a>
+          <a class="nav-link" href="{{ url_for('admin.user_management') }}" title="Users"><i class="bi bi-people"></i> <span>User Management</span></a>
         {% endif %}
       </nav>
     {% endif %}
@@ -308,6 +394,120 @@
         msg.textContent = 'Network error';
         msg.style.display = 'block';
       });
+    }
+    
+    // Notification Bell: Load and refresh notifications
+    function loadNotifications() {
+      const endpoint = '{{ url_for("admin.get_notifications") if current_user.is_authenticated and not current_user.get_id().startswith("storekeeper-") else url_for("storekeeper.get_notifications") if current_user.is_authenticated else "#" }}';
+      if (!endpoint || endpoint === '#') return;
+      
+      fetch(endpoint)
+        .then(r => r.json())
+        .then(notifs => {
+          const list = document.getElementById('notificationList');
+          const badge = document.getElementById('notifBadge');
+          const divider = document.getElementById('notifDivider');
+          
+          list.innerHTML = '';
+          if (notifs.length === 0) {
+            list.innerHTML = '<div class="dropdown-item text-center text-muted small">No new notifications</div>';
+            badge.style.display = 'none';
+            divider.style.display = 'none';
+          } else {
+            badge.textContent = notifs.length;
+            badge.style.display = notifs.length > 0 ? 'inline-block' : 'none';
+            divider.style.display = 'block';
+            
+            notifs.forEach(n => {
+              const item = document.createElement('a');
+              item.className = 'dropdown-item';
+              item.href = n.url || '#';
+              item.textContent = n.message;
+              item.style.whiteSpace = 'normal';
+              item.style.fontSize = '0.9rem';
+              
+              // On click, mark as read and update badge immediately
+              item.addEventListener('click', (e) => {
+                // Immediately decrement badge count
+                let currentCount = parseInt(badge.textContent) || 0;
+                currentCount--;
+                if (currentCount > 0) {
+                  badge.textContent = currentCount;
+                } else {
+                  badge.style.display = 'none';
+                }
+                
+                // Mark as read on server
+                if (n.url) {
+                  fetch('{{ url_for("admin.mark_notification_read", notif_id=0)[:-1] }}' + n.id, { method: 'POST' })
+                    .then(() => {
+                      // Wait briefly then reload to ensure consistency
+                      setTimeout(loadNotifications, 200);
+                      window.location.href = n.url;
+                    });
+                  e.preventDefault();
+                } else {
+                  e.preventDefault();
+                  fetch('{{ url_for("admin.mark_notification_read", notif_id=0)[:-1] }}' + n.id, { method: 'POST' })
+                    .then(() => {
+                      setTimeout(loadNotifications, 200);
+                    });
+                }
+              });
+              list.appendChild(item);
+            });
+          }
+        })
+        .catch(err => console.error('Error loading notifications:', err));
+    }
+    
+    // Load notifications on page load and refresh every 5 seconds
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        loadNotifications();
+        setInterval(loadNotifications, 5000);
+        initSidebarToggle();
+      });
+    } else {
+      loadNotifications();
+      setInterval(loadNotifications, 5000);
+      initSidebarToggle();
+    }
+
+    // Sidebar toggle functionality (also adjusts navbar width)
+    function initSidebarToggle() {
+      const toggleBtn = document.getElementById('sidebarToggle');
+      const sidebar = document.querySelector('.sidebar');
+      const mainContent = document.querySelector('.main-with-sidebar');
+      const flashContainer = document.querySelector('.flash-container');
+      const navbar = document.querySelector('.navbar');
+      const sidebarState = localStorage.getItem('sidebarCollapsed') === 'true';
+      
+      // Initialize sidebar state from localStorage
+      if (sidebarState) {
+        if (sidebar) sidebar.classList.add('collapsed');
+        if (mainContent) mainContent.classList.add('collapsed');
+        if (flashContainer) flashContainer.classList.add('collapsed');
+        if (navbar) navbar.classList.add('collapsed');
+        if (toggleBtn) toggleBtn.innerHTML = '<i class="bi bi-chevron-right"></i>';
+      }
+      
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          const isCollapsed = sidebar.classList.toggle('collapsed');
+          if (mainContent) mainContent.classList.toggle('collapsed');
+          if (flashContainer) flashContainer.classList.toggle('collapsed');
+          if (navbar) navbar.classList.toggle('collapsed');
+          
+          // Save state to localStorage
+          localStorage.setItem('sidebarCollapsed', isCollapsed);
+          
+          // Update toggle button icon
+          toggleBtn.innerHTML = isCollapsed 
+            ? '<i class="bi bi-chevron-right"></i>' 
+            : '<i class="bi bi-list"></i>';
+        });
+      }
     }
   </script>
   <!-- Bootstrap JS (bundle includes Popper) -->

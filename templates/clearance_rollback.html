@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <a href="{{ url_for('admin.clearance_report') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+    <h4 class="mb-0">Rollback Review: {{ recipient_name }} ({{ recipient_type }})</h4>
+    <div style="width: 85px;"></div>
+  </div>
+
+  {% if items and items|length > 0 %}
+  <form method="POST">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-dark">
+          <tr>
+            <th style="width:40px"></th>
+            <th>Issue ID</th>
+            <th>Equipment</th>
+            <th>Serials / Details</th>
+            <th>Return Conditions</th>
+            <th>Current Status</th>
+            <th>Admin Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+          <tr>
+            <td>
+              <input type="checkbox" name="item_ids" value="{{ it.id }}">
+            </td>
+            <td class="fw-semibold">{{ it.id }}</td>
+            <td>{{ it.equipment.name if it.equipment else ('#' + it.equipment_id|string) }}</td>
+            <td style="max-width:220px; white-space:pre-wrap;">{% if it.serial_numbers %}{{ it.serial_numbers }}{% else %}N/A{% endif %}</td>
+            <td style="max-width:220px; white-space:pre-wrap;">{% if it.return_conditions %}{{ it.return_conditions }}{% else %}-{% endif %}</td>
+            <td>
+              {% if it.damage_clearance_status %}
+                <span class="badge bg-warning">{{ it.damage_clearance_status }}</span>
+              {% else %}
+                <span class="text-muted small">No status</span>
+              {% endif %}
+            </td>
+            <td style="max-width:220px; white-space:pre-wrap;">{% if it.damage_clearance_notes %}{{ it.damage_clearance_notes }}{% else %}-{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mb-3">
+      <label for="note" class="form-label">Admin note (optional)</label>
+      <textarea name="note" id="note" rows="3" class="form-control" placeholder="Explain why these items need review..."></textarea>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-danger" type="submit" onclick="return confirm('Mark selected items for review and rollback clearance to Pending?')">Mark Selected for Review</button>
+      <a class="btn btn-secondary" href="{{ url_for('admin.clearance_report') }}">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+    <div class="alert alert-info">No returned items found for this recipient to mark for review.</div>
+    <a class="btn btn-secondary" href="{{ url_for('admin.clearance_report') }}">Back to report</a>
+  {% endif %}
+</div>
+{% endblock %}

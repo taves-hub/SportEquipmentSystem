@@ -35,7 +35,8 @@
               <div class="row mb-2">
                 <div class="col-md-6">
                   <label for="payroll_number" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Payroll Number</label>
-                  <input type="text" class="form-control form-control-sm" id="payroll_number" name="payroll_number" placeholder="SK001" required>
+                  <input type="text" class="form-control form-control-sm" id="payroll_number" name="payroll_number" placeholder="123456" pattern="[0-9]{6}" maxlength="6" title="Must be exactly 6 digits" required>
+                  <small class="text-muted" style="font-size: 0.75rem;">6 digits only</small>
                 </div>
                 <div class="col-md-6">
                   <label for="email" class="form-label mb-1" style="font-weight: 600; font-size: 0.9rem;">Email</label>

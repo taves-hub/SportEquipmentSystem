@@ -68,6 +68,11 @@ def register():
             flash('All fields are required.', 'danger')
             return redirect(url_for('auth.register'))
         
+        # Validate payroll number is exactly 6 digits
+        if not payroll_number.isdigit() or len(payroll_number) != 6:
+            flash('Payroll number must be exactly 6 digits.', 'danger')
+            return redirect(url_for('auth.register'))
+        
         if len(password) < 6:
             flash('Password must be at least 6 characters long.', 'danger')
             return redirect(url_for('auth.register'))

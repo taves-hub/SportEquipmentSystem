@@ -29,20 +29,18 @@
     <h4 class="mb-2"><i class="bi bi-send"></i> Campus Distribution</h4>
     <div class="row g-2">
       <div class="col-12 col-sm-6">
-        <a href="{{ url_for('admin.manage_campuses') }}" class="card shadow-sm p-2 summary border-top-info" style="text-decoration: none; color: inherit; transition: all 0.3s ease;">
+        <div class="card shadow-sm p-2 summary border-top-info">
           <h5 class="text-muted">Satellite Campuses</h5>
           <h2 class="text-info">{{ total_satellite_campuses }}</h2>
           <small class="text-muted">active campuses</small>
-          <p class="mb-0 mt-1"><i class="bi bi-arrow-right" style="color: #17a2b8;"></i> Manage campuses</p>
-        </a>
+        </div>
       </div>
       <div class="col-12 col-sm-6">
-        <a href="{{ url_for('admin.distribute_to_campus') }}" class="card shadow-sm p-2 summary border-top-accent" style="text-decoration: none; color: inherit; transition: all 0.3s ease;">
+        <div class="card shadow-sm p-2 summary border-top-accent">
           <h5 class="text-muted">Distribution Records</h5>
           <h2 style="color: var(--accent);">{{ total_distributions_count }}</h2>
           <small class="text-muted">equipment distributed</small>
-          <p class="mb-0 mt-1"><i class="bi bi-arrow-right" style="color: var(--accent);"></i> Distribute equipment</p>
-        </a>
+        </div>
       </div>
     </div>
   </div>

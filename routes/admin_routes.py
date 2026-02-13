@@ -2235,70 +2235,7 @@ def manage_campuses():
         return redirect(url_for('admin.manage_campuses'))
 
     campuses = SatelliteCampus.query.order_by(SatelliteCampus.name).all()
-    return render_template('manage_campuses.html', campuses=campuses, edit_mode=False)
-
-
-@admin_bp.route('/edit-campus/<int:campus_id>', methods=['GET', 'POST'])
-@login_required
-def edit_campus(campus_id):
-    """Edit an existing satellite campus."""
-    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
-        abort(403)
-
-    campus = SatelliteCampus.query.get_or_404(campus_id)
-
-    if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        code = request.form.get('code', '').strip()
-        location = request.form.get('location', '').strip()
-        is_active = request.form.get('is_active') == 'on'
-
-        if not name or not code:
-            flash('Campus name and code are required.', 'danger')
-            return redirect(url_for('admin.edit_campus', campus_id=campus_id))
-
-        # Check for conflicts with other campuses (excluding this one)
-        existing = SatelliteCampus.query.filter(
-            ((SatelliteCampus.name == name) | (SatelliteCampus.code == code)) &
-            (SatelliteCampus.id != campus_id)
-        ).first()
-
-        if existing:
-            flash('Another campus with that name or code already exists.', 'warning')
-            return redirect(url_for('admin.edit_campus', campus_id=campus_id))
-
-        campus.name = name
-        campus.code = code
-        campus.location = location
-        campus.is_active = is_active
-        db.session.commit()
-        flash('Campus updated successfully.', 'success')
-        return redirect(url_for('admin.manage_campuses'))
-
-    return render_template('manage_campuses.html', campus=campus, edit_mode=True)
-
-
-@admin_bp.route('/delete-campus/<int:campus_id>', methods=['POST'])
-@login_required
-def delete_campus(campus_id):
-    """Delete a satellite campus."""
-    if not (current_user.is_authenticated and isinstance(current_user, Admin)):
-        abort(403)
-
-    campus = SatelliteCampus.query.get_or_404(campus_id)
-
-    # Check if campus has associated storekeepers or distributions
-    storekeeper_count = StoreKeeper.query.filter_by(campus_id=campus_id).count()
-    distribution_count = CampusDistribution.query.filter_by(campus_id=campus_id).count()
-
-    if storekeeper_count > 0 or distribution_count > 0:
-        flash(f'Cannot delete campus. It has {storekeeper_count} storekeeper(s) and {distribution_count} distribution(s) associated with it.', 'danger')
-        return redirect(url_for('admin.manage_campuses'))
-
-    db.session.delete(campus)
-    db.session.commit()
-    flash('Campus deleted successfully.', 'success')
-    return redirect(url_for('admin.manage_campuses'))
+    return render_template('manage_campuses.html', campuses=campuses)
 
 
 @admin_bp.route('/distributions')

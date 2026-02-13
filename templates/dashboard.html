@@ -4,17 +4,17 @@
   <h2 class="text-center mb-2">Admin Dashboard</h2>
 
   <!-- Inventory Overview Section -->
-  <div class="mb-2">
-    <h4 class="mb-1"><i class="bi bi-box-seam"></i> Inventory Overview</h4>
-    <div class="row text-center g-1">
-      <div class="col-md-6">
+  <div class="mb-3">
+    <h4 class="mb-2"><i class="bi bi-box-seam"></i> Inventory Overview</h4>
+    <div class="row g-2">
+      <div class="col-12 col-sm-6">
         <div class="card shadow-sm p-2 summary border-top-primary">
           <h5 class="text-muted">Total Equipment</h5>
           <h2 class="text-primary">{{ total_equipment }}</h2>
           <small class="text-muted">items in inventory</small>
         </div>
       </div>
-      <div class="col-md-6">
+      <div class="col-12 col-sm-6">
         <div class="card shadow-sm p-2 summary border-top-success">
           <h5 class="text-muted">Total Equipment Distributed</h5>
           <h2 class="text-success">{{ total_distributed_quantity }}</h2>
@@ -25,17 +25,17 @@
   </div>
 
   <!-- Campus Distribution Section -->
-  <div class="mb-2">
-    <h4 class="mb-1"><i class="bi bi-send"></i> Campus Distribution</h4>
-    <div class="row text-center g-1">
-      <div class="col-md-6">
+  <div class="mb-3">
+    <h4 class="mb-2"><i class="bi bi-send"></i> Campus Distribution</h4>
+    <div class="row g-2">
+      <div class="col-12 col-sm-6">
         <div class="card shadow-sm p-2 summary border-top-info">
           <h5 class="text-muted">Satellite Campuses</h5>
           <h2 class="text-info">{{ total_satellite_campuses }}</h2>
           <small class="text-muted">active campuses</small>
         </div>
       </div>
-      <div class="col-md-6">
+      <div class="col-12 col-sm-6">
         <div class="card shadow-sm p-2 summary border-top-accent">
           <h5 class="text-muted">Distribution Records</h5>
           <h2 style="color: var(--accent);">{{ total_distributions_count }}</h2>
@@ -46,10 +46,10 @@
   </div>
 
   <!-- User Management Section -->
-  <div class="mb-2">
-    <h4 class="mb-1"><i class="bi bi-people"></i> User Management</h4>
-    <div class="row text-center g-1">
-      <div class="col-md-12">
+  <div class="mb-3">
+    <h4 class="mb-2"><i class="bi bi-people"></i> User Management</h4>
+    <div class="row g-2">
+      <div class="col-12">
         <a href="{{ url_for('admin.user_management') }}" class="card shadow-sm p-2 summary border-top" style="border-top-color: var(--uon-green) !important; text-decoration: none; color: inherit; transition: all 0.3s ease;">
           <h5 class="text-muted mb-1">Manage Storekeepers</h5>
           <p class="mb-0"><i class="bi bi-arrow-right" style="color: var(--uon-green);"></i> View pending approvals and manage user accounts</p>
@@ -59,24 +59,24 @@
   </div>
 
   <!-- Clearance & Risk Section -->
-  <div class="mb-2">
-    <h4 class="mb-1"><i class="bi bi-exclamation-triangle"></i> Clearance & Risk</h4>
-    <div class="row text-center g-1">
-      <div class="col-md-4">
+  <div class="mb-3">
+    <h4 class="mb-2"><i class="bi bi-exclamation-triangle"></i> Clearance & Risk</h4>
+    <div class="row g-2">
+      <div class="col-12 col-sm-4">
         <div class="card shadow-sm p-2 summary border-top-warning {% if returned_damaged > 0 %}risk-alert risk-pulse{% else %}risk-success{% endif %}">
           <h5 class="text-muted">Returned Damaged</h5>
           <h2 class="{% if returned_damaged > 0 %}text-warning{% else %}text-success{% endif %}">{{ returned_damaged }}</h2>
           <small class="text-muted">damaged items</small>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-12 col-sm-4">
         <div class="card shadow-sm p-2 summary border-top-danger {% if returned_lost > 0 %}risk-alert risk-pulse{% else %}risk-success{% endif %}">
           <h5 class="text-muted">Lost Items</h5>
           <h2 class="{% if returned_lost > 0 %}text-danger{% else %}text-success{% endif %}">{{ returned_lost }}</h2>
           <small class="text-muted">items not returned</small>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-12 col-sm-4">
         <div class="card shadow-sm p-2 summary border-top-secondary">
           <h5 class="text-muted">Students Cleared</h5>
           <h2 class="text-secondary">{{ total_cleared }}</h2>

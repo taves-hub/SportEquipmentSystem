@@ -1,5 +1,4 @@
 from models import IssuedEquipment
-from app import db
 from datetime import datetime, UTC
 import json
 
@@ -25,6 +24,7 @@ def get_clearance_status(recipient_id, recipient_type='student'):
 
     Returns: 'Cleared', 'Pending', or 'Overdue'
     """
+    from app import db
     if recipient_type == 'student':
         items = IssuedEquipment.query.filter_by(student_id=recipient_id).all()
     else:

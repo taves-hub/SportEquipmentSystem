@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <title>Sports Equipment Clearance System</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="Sports Equipment Clearance System for managing equipment distribution and clearance">
+  <meta name="theme-color" content="#27AE60">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -109,7 +111,7 @@
     .sidebar-toggle {
       position: absolute;
       top: 10px;
-      right: 8px;
+      right: -18px; /* Position outside the sidebar for better visibility */
       width: 34px;
       height: 34px;
       border-radius: 50%;
@@ -125,7 +127,7 @@
       overflow: visible;
     }
     .sidebar.collapsed .sidebar-toggle {
-      right: 8px;
+      right: -18px;
     }
     .main-with-sidebar {
       margin-left: 220px;
@@ -149,6 +151,40 @@
       .sidebar { position: static; width: 100%; height: auto; border-right: none; }
       .main-with-sidebar { margin-left: 0; }
       .flash-container { margin-left: 0; }
+      .navbar { width: 100%; margin-left: 0; }
+
+      /* Mobile sidebar overlay */
+      .sidebar.mobile-open {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        width: 280px;
+        height: calc(100vh - 56px);
+        background: var(--primary);
+        z-index: 1040;
+        overflow-y: auto;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+      }
+      .sidebar.mobile-open {
+        transform: translateX(0);
+      }
+
+      /* Overlay for mobile sidebar */
+      .sidebar-overlay {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1035;
+        display: none;
+      }
+      .sidebar-overlay.show {
+        display: block;
+      }
     }
   </style>
 </head>
@@ -201,7 +237,10 @@
   {% endif %}
   {% endwith %}
   
-  <div class="sidebar">
+  <!-- Mobile sidebar overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  
+  <div class="sidebar" id="sidebar">
     <button id="sidebarToggle" class="sidebar-toggle" title="Toggle sidebar"><i class="bi bi-list"></i></button>
     {% if current_user.is_authenticated %}
       <nav class="nav flex-column">
@@ -508,6 +547,64 @@
             : '<i class="bi bi-list"></i>';
         });
       }
+    }
+
+    // Mobile sidebar functionality
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+
+    if (sidebar && sidebarOverlay && sidebarToggle) {
+      // Toggle mobile sidebar
+      sidebarToggle.addEventListener('click', function(e) {
+        e.preventDefault();
+        const isMobile = window.innerWidth <= 767;
+        const isVerySmall = window.innerWidth <= 480;
+        
+        if (isMobile || isVerySmall) {
+          // Mobile behavior: overlay sidebar
+          sidebar.classList.toggle('mobile-open');
+          sidebarOverlay.classList.toggle('show');
+        } else {
+          // Desktop behavior: collapse/expand
+          sidebar.classList.toggle('collapsed');
+          document.querySelector('.navbar').classList.toggle('collapsed');
+          document.querySelector('.main-with-sidebar').classList.toggle('collapsed');
+          document.querySelector('.flash-container').classList.toggle('collapsed');
+          
+          const isCollapsed = sidebar.classList.contains('collapsed');
+          localStorage.setItem('sidebarCollapsed', isCollapsed);
+          
+          // Update toggle button icon
+          this.innerHTML = isCollapsed 
+            ? '<i class="bi bi-chevron-right"></i>' 
+            : '<i class="bi bi-list"></i>';
+        }
+      });
+
+      // Close mobile sidebar when clicking overlay
+      sidebarOverlay.addEventListener('click', function() {
+        sidebar.classList.remove('mobile-open');
+        sidebarOverlay.classList.remove('show');
+      });
+
+      // Close mobile sidebar when clicking a nav link
+      sidebar.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', function() {
+          if (window.innerWidth <= 767 || window.innerWidth <= 480) {
+            sidebar.classList.remove('mobile-open');
+            sidebarOverlay.classList.remove('show');
+          }
+        });
+      });
+
+      // Handle window resize
+      window.addEventListener('resize', function() {
+        if (window.innerWidth > 767) {
+          sidebar.classList.remove('mobile-open');
+          sidebarOverlay.classList.remove('show');
+        }
+      });
     }
   </script>
   <!-- Bootstrap JS (bundle includes Popper) -->

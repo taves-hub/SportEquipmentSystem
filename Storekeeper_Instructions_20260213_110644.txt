@@ -1,0 +1,75 @@
+================================================================================
+UNIVERSITY OF NAIROBI - SPORTS EQUIPMENT SYSTEM
+STOREKEEPER LOGIN CREDENTIALS & INSTRUCTIONS
+================================================================================
+
+Generated on: February 13, 2026 - 11:06:44
+
+STOREKEEPER CREDENTIALS
+--------------------------------------------------------------------------------
+S.No  Campus Name                    Storekeeper Name          Email                         
+--------------------------------------------------------------------------------
+1     Main Campus                    Paul Oduya                poduya@uonbi.ac.ke            
+       Payroll: 100200  |  Password: Password123
+2     Main Campus                    James Githinji            jgithinji@uonbi.ac.ke         
+       Payroll: 100201  |  Password: Password123
+3     Main Campus                    Rachel Achieng            rachieng@uonbi.ac.ke          
+       Payroll: 100202  |  Password: Password123
+4     Main Campus                    Samuel Langat             slangat@uonbi.ac.ke           
+       Payroll: 100203  |  Password: Password123
+5     Lower Kabete Campus            Charles Kiptanui          ckiptanui@uonbi.ac.ke         
+       Payroll: 100204  |  Password: Password123
+6     Lower Kabete Campus            Beatrice Mburu            bmburu@uonbi.ac.ke            
+       Payroll: 100205  |  Password: Password123
+7     Lower Kabete Campus            Gladys Mitei              gmitei@uonbi.ac.ke            
+       Payroll: 100206  |  Password: Password123
+8     Lower Kabete Campus            Robert Mumbi              rmumbi@uonbi.ac.ke            
+       Payroll: 100207  |  Password: Password123
+9     Kikuyu Campus                  Mercy Wanjohi             mwanjohi@uonbi.ac.ke          
+       Payroll: 100208  |  Password: Password123
+10    Kikuyu Campus                  Priscilla Jeptoo          pjeptoo@uonbi.ac.ke           
+       Payroll: 100209  |  Password: Password123
+11    Kenyatta National Campus       Martin Nyambura           mnyambura@uonbi.ac.ke         
+       Payroll: 100210  |  Password: Password123
+12    Kenyatta National Campus       Charles Wambui            cwambui@uonbi.ac.ke           
+       Payroll: 100211  |  Password: Password123
+13    Parklands Campus               Henry Oduya               hoduya@uonbi.ac.ke            
+       Payroll: 100212  |  Password: Password123
+14    Parklands Campus               Susan Kiplagat            skiplagat@uonbi.ac.ke         
+       Payroll: 100213  |  Password: Password123
+15    Parklands Campus               Helen Kiptoo              hkiptoo@uonbi.ac.ke           
+       Payroll: 100214  |  Password: Password123
+16    Kenya Science Campus           Mary Mwangi               mmwangi@uonbi.ac.ke           
+       Payroll: 100215  |  Password: Password123
+17    Kenya Science Campus           Alice Wambui              awambui@uonbi.ac.ke           
+       Payroll: 100216  |  Password: Password123
+
+================================================================================
+LOGIN INSTRUCTIONS
+================================================================================
+
+1. SYSTEM ACCESS
+   - Navigate to the Sports Equipment System login page
+   - Enter your Payroll Number in the username field
+   - Enter 'Password123' in the password field
+
+2. FIRST LOGIN
+   - After successful login, you may be prompted to change your password
+   - Update your password to a secure one immediately
+
+3. ACCOUNT DETAILS
+   - Name: Your assigned full name
+   - Campus: Your assigned campus location
+   - Email: Use this for system notifications and communication
+
+4. CAMPUS ASSIGNMENTS
+   Main Campus: Payroll 100200
+   Lower Kabete Campus: Payroll 100204
+   Kikuyu Campus: Payroll 100208
+   Kenyatta National Campus: Payroll 100210
+   Parklands Campus: Payroll 100212
+   Kenya Science Campus: Payroll 100215
+
+5. SUPPORT
+   - For login issues, contact the System Administrator
+   - For equipment-related questions, contact your Campus Manager

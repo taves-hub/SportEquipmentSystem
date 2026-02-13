@@ -74,19 +74,21 @@
         .hero-text { font-size:40px; }
         .welcome-title { font-size:34px; }
     }
-    @media (max-width: 992px) {
+    @media (max-width: 768px) {
         .login-root { flex-direction:column; }
         .login-hero { height:300px; order:0; }
         .hero-text { font-size:28px; }
         .login-panel { order:1; flex: none; padding:1.5rem; min-width:0; width:100%; }
-        .login-panel .card { margin:0 auto; }
+        .login-panel .card { margin:0 auto; max-width:400px; }
     }
     @media (max-width: 576px) {
         .hero-text { font-size:20px; }
         .welcome-title { font-size:22px; }
-        .login-hero { height:220px; }
+        .login-hero { height:250px; }
         .login-panel { padding:1rem; }
         .slideshow .slide { background-position:center; }
+        .login-brand { width:100px !important; }
+        .card { margin: 0 0.5rem; }
     }
 </style>
 

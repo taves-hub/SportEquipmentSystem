@@ -425,12 +425,149 @@ h4 i {
 .site-footer a:hover{ color: var(--primary); text-decoration: underline; }
 .site-footer .text-muted{ color: var(--muted) !important; }
 
-/* Responsive small tweaks */
-@media (max-width:576px){
-  .navbar .nav-link{ font-size: 0.95rem; }
-  .card.summary h2{ font-size: 1.4rem; }
-  h1{ font-size:20px; }
-  h2{ font-size:18px; }
+/* Hide sidebar toggle by default */
+.sidebar-toggle {
+  display: none;
+}
+
+/* Medium screens (tablets) */
+@media (max-width: 991px) and (min-width: 577px) {
+  .navbar .nav-link { font-size: 0.9rem; }
+  .card.summary h2 { font-size: 1.5rem; }
+
+  /* Adjust sidebar width */
+  .sidebar { width: 200px; }
+  .main-with-sidebar { margin-left: 200px; }
+  .navbar { width: calc(100% - 200px); margin-left: 200px; }
+
+  /* Stack some dashboard cards */
+  .dashboard-compact .row .col-md-6 {
+    margin-bottom: 1rem;
+  }
+
+  /* Show sidebar toggle on tablets */
+  .sidebar-toggle {
+    display: flex !important;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    background: var(--uon-green);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+    right: -20px !important; /* Make it more visible on tablets */
+  }
+
+  .sidebar-toggle:hover {
+    background: #1e8449;
+    transform: scale(1.05);
+  }
+}
+
+/* Large screens */
+@media (min-width: 1200px) {
+  .container { max-width: 1400px; }
+  .table th, .table td { font-size: 14px; }
+
+  /* Hide sidebar toggle on large screens since sidebar is always visible */
+  .sidebar-toggle {
+    display: none !important;
+  }
+}
+
+/* Extra small screens - ensure readability */
+@media (max-width: 480px) {
+  .container { padding-left: 0.5rem; padding-right: 0.5rem; }
+
+  /* Make sidebar an overlay on very small screens instead of hiding it */
+  .sidebar {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    width: 250px;
+    height: calc(100vh - 56px);
+    background: var(--primary);
+    z-index: 1040;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .main-with-sidebar { margin-left: 0; }
+  .navbar { width: 100%; margin-left: 0; }
+
+  /* Show toggle button as floating button on very small screens */
+  .sidebar-toggle {
+    display: flex !important;
+    position: fixed;
+    top: 70px;
+    right: 15px;
+    width: 45px;
+    height: 45px;
+    background: var(--uon-green);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 3px 10px rgba(39, 174, 96, 0.4);
+    z-index: 1035;
+    font-size: 18px;
+  }
+
+  .sidebar-toggle:hover {
+    background: #1e8449;
+    transform: scale(1.1);
+  }
+
+  /* Stack all dashboard cards vertically */
+  .row .col-md-6, .row .col-md-4, .row .col-md-12 {
+    margin-bottom: 1rem;
+  }
+}
+
+  /* Make buttons full width on mobile */
+  .btn { width: 100%; margin-bottom: 0.5rem; }
+
+  /* Adjust modal sizes */
+  .modal-dialog { margin: 0.5rem; }
+
+  /* Better spacing for forms */
+  .form-group { margin-bottom: 1.5rem; }
+
+  /* Make dropdowns full width */
+  .dropdown-menu { width: 100%; left: 0; right: 0; }
+}
+
+/* Touch-friendly buttons and links */
+@media (pointer: coarse) {
+  .btn, .nav-link, .dropdown-item {
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+  }
+
+  .sidebar .nav-link {
+    padding: 0.75rem 0.6rem;
+    min-height: 48px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .card { border: 2px solid #000; }
+  .btn { border-width: 2px; }
+  .table { border: 2px solid #000; }
+  .table th, .table td { border: 1px solid #000; }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Print styles */

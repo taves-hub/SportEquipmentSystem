@@ -1,10 +1,7 @@
-# config.py
 import os
 
 class Config:
-    # Use environment variables for security
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
-        'DATABASE_URL',
-        'postgresql://localhost/sport_equipment_db'  # fallback for local dev
-    )
+    SECRET_KEY = 'your-secret-key'
+    # PostgreSQL connection string
+    SQLALCHEMY_DATABASE_URI = 'postgresql://sport_equipment_db_user:tTPNuwy5mB9wmGVbZU5kOVYD3A6SCNbJ@dpg-d67e0mbnv86c739mctug-a:5432/sport_equipment_db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False

@@ -6,34 +6,48 @@
   <div class="row">
     <div class="col-md-5">
       <div class="card p-3 shadow-sm">
-        <form method="post">
+        <form method="post" action="{% if edit_mode %}{{ url_for('admin.edit_campus', campus_id=campus.id) }}{% else %}{{ url_for('admin.manage_campuses') }}{% endif %}">
           <div class="mb-3">
             <label class="form-label">Campus Name</label>
-            <input name="name" class="form-control" required>
+            <input name="name" class="form-control" value="{% if edit_mode %}{{ campus.name }}{% endif %}" required>
           </div>
           <div class="mb-3">
             <label class="form-label">Code</label>
-            <input name="code" class="form-control" required>
+            <input name="code" class="form-control" value="{% if edit_mode %}{{ campus.code }}{% endif %}" required>
           </div>
           <div class="mb-3">
             <label class="form-label">Location</label>
-            <input name="location" class="form-control">
+            <input name="location" class="form-control" value="{% if edit_mode %}{{ campus.location }}{% endif %}">
           </div>
+          {% if edit_mode %}
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="is_active" name="is_active" {% if campus.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="is_active">Active</label>
+          </div>
+          {% endif %}
           <div class="d-grid gap-2">
-            <button class="btn btn-primary"><i class="bi bi-plus-circle"></i> Add Campus</button>
+            <button class="btn btn-primary">
+              <i class="bi bi-{% if edit_mode %}pencil{% else %}plus-circle{% endif %}"></i>
+              {% if edit_mode %}Update Campus{% else %}Add Campus{% endif %}
+            </button>
+            {% if edit_mode %}
+            <a href="{{ url_for('admin.manage_campuses') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Cancel</a>
+            {% else %}
             <a href="{{ url_for('admin.distribute_to_campus') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Distribution</a>
+            {% endif %}
           </div>
         </form>
       </div>
     </div>
 
+    {% if not edit_mode %}
     <div class="col-md-7">
       <div class="card shadow-sm p-3">
         <h6 class="mb-3">Existing Campuses</h6>
         <div class="table-responsive">
           <table class="table table-sm">
             <thead>
-              <tr><th>#</th><th>Name</th><th>Code</th><th>Location</th><th>Active</th></tr>
+              <tr><th>#</th><th>Name</th><th>Code</th><th>Location</th><th>Active</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {% for c in campuses %}
@@ -43,15 +57,27 @@
                   <td>{{ c.code }}</td>
                   <td>{{ c.location or '—' }}</td>
                   <td>{{ 'Yes' if c.is_active else 'No' }}</td>
+                  <td>
+                    <a href="{{ url_for('admin.edit_campus', campus_id=c.id) }}" class="btn btn-sm btn-outline-primary me-1" title="Edit">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <form method="post" action="{{ url_for('admin.delete_campus', campus_id=c.id) }}" class="d-inline" 
+                          onsubmit="return confirm('Are you sure you want to delete this campus? This action cannot be undone.')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
                 </tr>
               {% else %}
-                <tr><td colspan="5" class="text-muted text-center">No campuses found.</td></tr>
+                <tr><td colspan="6" class="text-muted text-center">No campuses found.</td></tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
       </div>
     </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

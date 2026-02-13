@@ -4,6 +4,7 @@ from flask import Flask, redirect, url_for, send_from_directory
 from config import Config
 from extensions import db, login_manager, migrate
 from models import Admin, StoreKeeper
+from werkzeug.security import generate_password_hash
 
 # MySQL compatibility
 pymysql.install_as_MySQLdb()
@@ -80,6 +81,21 @@ def create_app(test_config=None):
     # Ensure database tables exist
     with app.app_context():
         db.create_all()
+        
+        # Auto-create admin user if not exists
+        if not Admin.query.filter_by(username='admin').first():
+            admin = Admin(
+                username='admin',
+                email='admin@example.com',
+                password_hash=generate_password_hash('admin123')
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("✓ Admin user created automatically on startup!")
+            print("Username: admin")
+            print("Password: admin123")
+        else:
+            print("! Admin user already exists")
 
     return app
 

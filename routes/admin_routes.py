@@ -2416,7 +2416,7 @@ def approve_storekeeper(user_id):
         flash('This storekeeper is already approved.', 'info')
     else:
         storekeeper.is_approved = True
-        storekeeper.approved_at = datetime.utcnow
+        storekeeper.approved_at = datetime.utcnow()
         db.session.commit()
         flash(f'Storekeeper "{storekeeper.full_name}" has been approved successfully.', 'success')
     

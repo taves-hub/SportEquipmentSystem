@@ -6,5 +6,5 @@ class Config:
 
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres@localhost:5432/sports_equipment_db"
+        SQLALCHEMY_DATABASE_URI = 'postgresql://sport_equipment_db_user:tTPNuwy5mB9wmGVbZU5kOVYD3A6SCNbJ@dpg-d67e0mbnv86c739mctug-a:5432/sport_equipment_db'
     )

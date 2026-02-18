@@ -37,9 +37,9 @@
                         </div>
                         <div class="mb-3 position-relative">
                             <label for="password" class="form-label fw-bold">Password</label>
-                            <div class="input-group">
+                            <div class="password-field-wrapper">
                                 <input type="password" class="form-control" id="password" name="password" placeholder="Enter your Password" required>
-                                <button type="button" class="btn btn-outline-secondary" id="togglePassword" tabindex="-1" aria-label="Show password">👁️</button>
+                                </button>
                             </div>
                         </div>
                         
@@ -69,6 +69,7 @@
     .welcome-title { color:#4CAF50; font-weight:700; font-size:40px; margin-top:0.5rem; }
     .rounded-lg { border-radius:10px; }
 
+
     /* Responsive behavior */
     @media (max-width: 1200px) {
         .hero-text { font-size:40px; }
@@ -79,7 +80,7 @@
         .login-hero { height:300px; order:0; }
         .hero-text { font-size:28px; }
         .login-panel { order:1; flex: none; padding:1.5rem; min-width:0; width:100%; }
-        .login-panel .card { margin:0 auto; max-width:400px; }
+        .login-panel .card { margin-left:25%; margin-right:25%; max-width:400px; }
     }
     @media (max-width: 576px) {
         .hero-text { font-size:20px; }
@@ -98,8 +99,17 @@
         var pwd = document.getElementById('password');
         if(toggle && pwd){
             toggle.addEventListener('click', function(){
-                if(pwd.type === 'password'){ pwd.type = 'text'; toggle.textContent = '🙈'; }
-                else { pwd.type = 'password'; toggle.textContent = '👁️'; }
+                var icon = toggle.querySelector('i');
+                if(pwd.type === 'password'){ 
+                    pwd.type = 'text'; 
+                    icon.classList.remove('bi-eye');
+                    icon.classList.add('bi-eye-slash');
+                }
+                else { 
+                    pwd.type = 'password'; 
+                    icon.classList.remove('bi-eye-slash');
+                    icon.classList.add('bi-eye');
+                }
             });
         }
         // Simple slideshow for hero

@@ -136,6 +136,21 @@
     </div>
   </div>
 
+  <!-- Access Logs Section -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light border-top" style="border-top-width: 3px !important; border-top-color: #6c757d !important;">
+      <h5 class="mb-0" style="color: #6c757d;">
+        <i class="bi bi-shield-check"></i> Access Logs & Audit Trail
+      </h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted mb-3">View system access logs for audit trail and security monitoring.</p>
+      <a href="{{ url_for('admin.access_logs') }}" class="btn btn-primary">
+        <i class="bi bi-shield-check"></i> View Access Logs
+      </a>
+    </div>
+  </div>
+
   <!-- Info Section -->
   <div class="alert alert-light border mt-4">
     <h6 class="mb-2">
@@ -146,6 +161,7 @@
       <li><strong>Approve:</strong> Click "Approve" to activate a storekeeper account. They can then log in to the system.</li>
       <li><strong>Reject:</strong> Click "Reject" to remove a pending registration permanently.</li>
       <li><strong>Deactivate:</strong> Click "Deactivate" to revoke access from an approved storekeeper without deleting their account.</li>
+    <li><strong>Access Logs:</strong> Review detailed audit logs of all admin user activities for security and compliance.</li>
     </ul>
   </div>
 </div>

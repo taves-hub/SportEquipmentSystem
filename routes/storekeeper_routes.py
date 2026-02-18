@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session, jsonify, abort
 from flask_login import login_required, current_user
-from models import StoreKeeper, Equipment, IssuedEquipment, CampusDistribution, Student, Staff, Notification
+from models import StoreKeeper, Equipment, IssuedEquipment, CampusDistribution, Student, Staff, Notification, AccessLog
 from extensions import db
 from datetime import datetime, UTC
 from sqlalchemy import func
@@ -8,33 +8,6 @@ from Utils.student_checks import has_unreturned_items
 import json
 
 storekeeper_bp = Blueprint('storekeeper', __name__, url_prefix='/storekeeper')
-
-@storekeeper_bp.route('/api/notifications/unread-count')
-@login_required
-def unread_notifications_count():
-    """API endpoint to get unread notifications count for storekeeper"""
-    unread = Notification.query.filter_by(recipient_role='storekeeper', recipient_id=current_user.id, is_read=False).count()
-    return jsonify({'count': unread})
-
-@storekeeper_bp.route('/api/notifications')
-@login_required
-def get_notifications():
-    """API endpoint to get all unread notifications for storekeeper"""
-    notifs = Notification.query.filter_by(recipient_role='storekeeper', recipient_id=current_user.id, is_read=False).order_by(Notification.created_at.desc()).limit(10).all()
-    return jsonify([
-        {'id': n.id, 'message': n.message, 'url': n.url, 'created_at': n.created_at.isoformat()}
-        for n in notifs
-    ])
-
-@storekeeper_bp.route('/api/notifications/<int:notif_id>/read', methods=['POST'])
-@login_required
-def mark_notification_read(notif_id):
-    """API endpoint to mark a notification as read"""
-    notif = Notification.query.get(notif_id)
-    if notif:
-        notif.is_read = True
-        db.session.commit()
-    return jsonify({'success': True})
 
 @storekeeper_bp.route('/clearance-report', methods=['GET'])
 @login_required
@@ -180,6 +153,79 @@ def _require_storekeeper():
     if not isinstance(current_user, StoreKeeper):
         # if an admin is logged in, send them to admin dashboard
         return redirect(url_for('admin.dashboard'))
+    
+    # Log access for audit trail
+    try:
+        from flask import session
+        import socket
+
+        # Get user full name
+        full_name = getattr(current_user, 'full_name', 'Unknown')
+
+        # Get session ID
+        session_id = session.get('session_id', session.sid if hasattr(session, 'sid') else None)
+
+        # Parse User Agent for device/browser info
+        user_agent = request.headers.get('User-Agent', '')
+
+        # Get server hostname
+        server_hostname = socket.gethostname()
+
+        # Determine protocol
+        protocol = 'HTTPS' if request.is_secure else 'HTTP'
+
+        # Get referrer URL
+        referrer_url = request.referrer
+
+        # Create comprehensive log entry
+        log = AccessLog(
+            # 1. USER IDENTIFICATION
+            user_id=current_user.id,
+            user_type='storekeeper',
+            username=current_user.payroll_number,
+            full_name=full_name,
+
+            # 2. TIMESTAMP
+            timezone='UTC',
+
+            # 3. SOURCE INFORMATION
+            ip_address=request.remote_addr,
+            user_agent=user_agent,
+
+            # 4. ACTION PERFORMED
+            action=f"Accessed {request.endpoint or 'unknown'}",
+            endpoint=request.endpoint,
+            method=request.method,
+            action_status='Success',
+
+            # 5. AUTHENTICATION DETAILS
+            auth_method='password',
+            session_id=session_id,
+            mfa_used=False,
+
+            # 6. SYSTEM/APPLICATION DETAILS
+            app_name='SportEquipmentSystem',
+            module=request.endpoint.split('.')[-1] if request.endpoint else 'unknown',
+            server_hostname=server_hostname,
+            protocol=protocol,
+
+            # 9. ADDITIONAL METADATA
+            referrer_url=referrer_url,
+
+            # 10. AUDIT TRAIL
+            is_tamper_proof=True
+        )
+
+        # Generate integrity hash
+        log.log_hash = log.generate_log_hash()
+
+        db.session.add(log)
+        db.session.commit()
+        print(f"✓ Storekeeper access logged: {current_user.payroll_number} -> {request.endpoint}")
+    except Exception as e:
+        # Don't break the request if logging fails
+        print(f"✗ Storekeeper logging error: {str(e)}")
+        db.session.rollback()
 
 @storekeeper_bp.route('/dashboard')
 @login_required
@@ -256,9 +302,6 @@ def dashboard():
             except:
                 pass
     
-    # Get unread notifications count for this storekeeper
-    unread_count = Notification.query.filter_by(recipient_role='storekeeper', recipient_id=current_user.id, is_read=False).count()
-    
     return render_template('storekeeper_dashboard.html',
                            total_equipment=total_equipment,
                            total_active=total_active,
@@ -268,8 +311,7 @@ def dashboard():
                            low_stock=low_stock,
                            due_items=due_items,
                            current_user=current_user,
-                           campus_name=current_user.campus.name if current_user.campus else 'Unknown',
-                           unread_notifications=unread_count)
+                           campus_name=current_user.campus.name if current_user.campus else 'Unknown')
 
 
 @storekeeper_bp.route('/equipment')

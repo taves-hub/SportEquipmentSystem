@@ -151,6 +151,110 @@ class CampusDistribution(db.Model):
     equipment = db.relationship('Equipment', backref='campus_distributions')
 
 
+class AccessLog(db.Model):
+    __tablename__ = 'access_logs'
+    id = db.Column(db.Integer, primary_key=True)  # 10. AUDIT TRAIL: Unique log entry ID
+    user_id = db.Column(db.Integer, nullable=False)  # 1. USER IDENTIFICATION
+    user_type = db.Column(db.String(20), nullable=False)  # 1. USER IDENTIFICATION: Role/Privilege Level
+    username = db.Column(db.String(120), nullable=False)  # 1. USER IDENTIFICATION
+    full_name = db.Column(db.String(120), nullable=True)  # 1. USER IDENTIFICATION: Full Name
+
+    # 2. TIMESTAMP
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)  # Date & Time
+    timezone = db.Column(db.String(10), default='UTC', nullable=False)  # Time zone
+
+    # 3. SOURCE INFORMATION
+    ip_address = db.Column(db.String(45), nullable=True)  # IP Address
+    user_agent = db.Column(db.Text, nullable=True)  # Browser type, version, OS, Device type
+    geolocation = db.Column(db.String(255), nullable=True)  # Geolocation (optional)
+
+    # 4. ACTION PERFORMED
+    action = db.Column(db.String(200), nullable=False)  # Event type & description
+    endpoint = db.Column(db.String(255), nullable=True)  # Resource accessed (page URL)
+    method = db.Column(db.String(10), nullable=False, default='GET')  # HTTP method
+    status_code = db.Column(db.Integer, nullable=True)  # HTTP status code
+    action_status = db.Column(db.String(20), default='Success', nullable=False)  # Success/Failure
+
+    # 5. AUTHENTICATION DETAILS
+    auth_method = db.Column(db.String(50), default='password', nullable=False)  # Authentication method
+    session_id = db.Column(db.String(255), nullable=True)  # Session ID
+    login_attempts = db.Column(db.Integer, default=0, nullable=False)  # Login attempt count
+    mfa_used = db.Column(db.Boolean, default=False, nullable=False)  # MFA status
+
+    # 6. SYSTEM/APPLICATION DETAILS
+    app_name = db.Column(db.String(100), default='SportEquipmentSystem', nullable=False)  # Application name
+    module = db.Column(db.String(100), nullable=True)  # Module/section accessed
+    server_hostname = db.Column(db.String(255), nullable=True)  # Server/hostname
+    protocol = db.Column(db.String(10), default='HTTP', nullable=False)  # Protocol used
+
+    # 7. DATA MODIFICATION TRACKING
+    data_changed = db.Column(db.Text, nullable=True)  # Before/after values
+    record_id = db.Column(db.String(100), nullable=True)  # Record ID affected
+    query_executed = db.Column(db.Text, nullable=True)  # Query executed
+
+    # 8. SECURITY & COMPLIANCE
+    access_level = db.Column(db.String(50), nullable=True)  # Access approval level
+    alerts_triggered = db.Column(db.Text, nullable=True)  # Alerts triggered
+    log_hash = db.Column(db.String(128), nullable=True)  # Log integrity check (hash)
+    retention_days = db.Column(db.Integer, default=365, nullable=False)  # Retention period
+
+    # 9. ADDITIONAL METADATA
+    duration_ms = db.Column(db.Integer, nullable=True)  # Duration in milliseconds
+    data_size_bytes = db.Column(db.Integer, nullable=True)  # Size of data transferred
+    referrer_url = db.Column(db.String(500), nullable=True)  # Referrer URL
+
+    # 10. AUDIT TRAIL REQUIREMENTS - Tamper-proof, searchable, secure
+    is_tamper_proof = db.Column(db.Boolean, default=True, nullable=False)
+    search_index = db.Column(db.Text, nullable=True)  # For enhanced searchability
+
+    def __repr__(self):
+        return f'<AccessLog {self.username} - {self.action} at {self.timestamp}>'
+
+    def generate_log_hash(self):
+        """Generate integrity hash for tamper-proof logging"""
+        import hashlib
+        log_data = f"{self.id}{self.user_id}{self.username}{self.timestamp}{self.action}{self.endpoint}"
+        return hashlib.sha256(log_data.encode()).hexdigest()
+
+    def to_dict(self):
+        """Convert log entry to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'user_type': self.user_type,
+            'username': self.username,
+            'full_name': self.full_name,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'timezone': self.timezone,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+            'geolocation': self.geolocation,
+            'action': self.action,
+            'endpoint': self.endpoint,
+            'method': self.method,
+            'status_code': self.status_code,
+            'action_status': self.action_status,
+            'auth_method': self.auth_method,
+            'session_id': self.session_id,
+            'login_attempts': self.login_attempts,
+            'mfa_used': self.mfa_used,
+            'app_name': self.app_name,
+            'module': self.module,
+            'server_hostname': self.server_hostname,
+            'protocol': self.protocol,
+            'data_changed': self.data_changed,
+            'record_id': self.record_id,
+            'query_executed': self.query_executed,
+            'access_level': self.access_level,
+            'alerts_triggered': self.alerts_triggered,
+            'log_hash': self.log_hash,
+            'retention_days': self.retention_days,
+            'duration_ms': self.duration_ms,
+            'data_size_bytes': self.data_size_bytes,
+            'referrer_url': self.referrer_url,
+            'is_tamper_proof': self.is_tamper_proof
+        }
+
 class Notification(db.Model):
     __tablename__ = 'notifications'
     id = db.Column(db.Integer, primary_key=True)

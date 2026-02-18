@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 1cm;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 1000px !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+
+    /* Hide non-print UI elements */
+    .navbar, nav, .btn, a:not([href*="#"]), .d-flex, .row, .col-md-4, .col-md-6, .col-lg-3 {
+      display: none !important;
+    }
+
+    .table-responsive {
+      margin: 0 auto;
+    }
+  }
+
+  /* Center content */
+  .container {
+    margin-left: auto;
+    margin-right: auto;
+  }
+</style>
+
+<div class="container py-5" style="max-width: 1200px; margin: 0 auto;">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary btn-sm" style="width: auto; padding: 0.25rem 0.5rem;"><i class="bi bi-arrow-left"></i> Back</a>
+    <h3 class="text-primary mb-0">Issued Equipments Report</h3>
+    <div style="width: 85px;"></div><!-- Spacer for alignment -->
+  </div>
+
+  <!-- Filter Section -->
+  <div class="row mb-3">
+    <div class="col-12">
+      <form method="get" class="d-flex flex-wrap gap-3 align-items-end justify-content-between" action="{{ url_for('admin.issued_equipments_report') }}">
+        <div class="d-flex flex-wrap gap-3 align-items-end" style="flex: 1;">
+          <div style="flex: 1; min-width: 200px;">
+            <label for="campus_id" class="form-label small">Search by Campus:</label>
+            <select name="campus_id" id="campus_id" class="form-select form-select-sm">
+              <option value="">All Campuses</option>
+              {% for campus in campuses %}
+              <option value="{{ campus.id }}" {% if selected_campus|string == campus.id|string %}selected{% endif %}>{{ campus.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div style="flex: 1; min-width: 200px;">
+            <label for="clearance_status" class="form-label small">Filter by Clearance Status:</label>
+            <select name="clearance_status" id="clearance_status" class="form-select form-select-sm">
+              <option value="All" {% if selected_clearance == 'All' %}selected{% endif %}>All Statuses</option>
+              {% for status in clearance_statuses %}
+              <option value="{{ status }}" {% if selected_clearance == status %}selected{% endif %}>{{ status }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div style="flex: 1; min-width: 200px;">
+            <label for="condition" class="form-label small">Filter by Condition:</label>
+            <select name="condition" id="condition" class="form-select form-select-sm">
+              <option value="All" {% if selected_condition == 'All' %}selected{% endif %}>All Conditions</option>
+              {% for cond in conditions %}
+              <option value="{{ cond }}" {% if selected_condition == cond %}selected{% endif %}>{{ cond }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-search"></i> Search</button>
+            <a href="{{ url_for('admin.issued_equipments_report') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('admin.issued_equipments_report', campus_id=selected_campus, clearance_status=selected_clearance, condition=selected_condition, export='csv') }}" class="btn btn-outline-secondary btn-sm">Export CSV</a>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">Print PDF</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Table Section -->
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped align-middle small">
+      <thead class="table-dark">
+        <tr>
+          <th>Recipient ID</th>
+          <th>Recipient Name</th>
+          <th>Type</th>
+          <th>Campus</th>
+          <th>Equipment Name</th>
+          <th>Category</th>
+          <th>Qty</th>
+          <th>Date Issued</th>
+          <th>Status</th>
+          <th>Condition</th>
+          <th>Clearance Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.staff_payroll or item.student_id }}</td>
+          <td>{{ (item.staff.name if item.staff else item.student.name if item.student else '—') }}</td>
+          <td>{{ 'Staff' if item.staff else 'Student' if item.student else '—' }}</td>
+          <td>
+            {% if item.staff and item.staff.campus %}
+              {{ item.staff.campus.name }}
+            {% elif item.student and item.student.campus %}
+              {{ item.student.campus.name }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>{{ item.equipment.name if item.equipment else item.equipment_id }}</td>
+          <td>{{ item.equipment.category if item.equipment else '—' }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.date_issued.strftime('%Y-%m-%d') }}</td>
+          <td><span class="badge bg-info">{{ item.status }}</span></td>
+          <td>{{ item.return_conditions or '—' }}</td>
+          <td>{{ item.damage_clearance_status or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="11" class="text-center text-muted">No issued equipments found matching the criteria.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if total > 0 %}
+  <nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+      {% if page > 1 %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_equipments_report', campus_id=selected_campus, clearance_status=selected_clearance, condition=selected_condition, page=1, per_page=per_page) }}">First</a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_equipments_report', campus_id=selected_campus, clearance_status=selected_clearance, condition=selected_condition, page=page-1, per_page=per_page) }}">Previous</a>
+      </li>
+      {% endif %}
+      {% for p in range(max(1, page-2), min(total_pages+1, page+3)) %}
+        {% if p == page %}
+        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+        {% else %}
+        <li class="page-item"><a class="page-link" href="{{ url_for('admin.issued_equipments_report', campus_id=selected_campus, clearance_status=selected_clearance, condition=selected_condition, page=p, per_page=per_page) }}">{{ p }}</a></li>
+        {% endif %}
+      {% endfor %}
+      {% if page < total_pages %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_equipments_report', campus_id=selected_campus, clearance_status=selected_clearance, condition=selected_condition, page=page+1, per_page=per_page) }}">Next</a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_equipments_report', campus_id=selected_campus, clearance_status=selected_clearance, condition=selected_condition, page=total_pages, per_page=per_page) }}">Last</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  <div class="text-center text-muted small mt-2">Page {{ page }} of {{ total_pages }} | Total: {{ total }} issued equipments</div>
+  {% endif %}
+</div>
+
+{% endblock %}

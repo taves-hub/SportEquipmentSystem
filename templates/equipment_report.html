@@ -4,8 +4,34 @@
   @media print {
     @page {
       size: A4 landscape;
-      margin: 0.3cm;
+      margin: 1cm;
     }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 1000px !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+
+    /* Hide non-print UI elements */
+    .navbar, nav, .btn, a, .d-flex, .row, .col-md-8, .col-md-4 {
+      display: none !important;
+    }
+
+    .table-responsive {
+      margin: 0 auto;
+    }
+  }
+
+  /* Center content in normal view */
+  .container {
+    margin-left: auto;
+    margin-right: auto;
   }
 
   /* Table container for scroll on smaller screens */
@@ -62,26 +88,35 @@
     }
   }
 </style>
-<div class="container py-5">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
-    <h3 class="text-info mb-0">Total Equipment Report</h3>
+<div class="container py-5" style="max-width: 1200px; margin: 0 auto;">
+  <div class="d-flex justify-content-between align-items-center mb-4" style="margin-bottom: 2rem;">
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary btn-sm" style="width: auto; padding: 0.25rem 0.5rem;"><i class="bi bi-arrow-left"></i> Back</a>
+    <h3 class="text-info mb-0" style="text-align: center; flex: 1;">Total Equipment Report</h3>
     <div style="width: 85px;"></div><!-- Spacer for alignment -->
   </div>
 
   <div class="row mb-3">
-    <div class="col-md-6">
-      <form method="get" class="d-flex" action="{{ url_for('admin.equipment_report') }}">
-        <input type="text" name="name" class="form-control me-2" placeholder="Search by equipment name or category code..." value="{{ search_name or '' }}">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Search</button>
-        {% if search_name %}
-          <a href="{{ url_for('admin.equipment_report') }}" class="btn btn-secondary ms-2"><i class="bi bi-x-circle"></i> Clear</a>
+    <div class="col-md-8">
+      <form method="get" class="row g-2" action="{{ url_for('admin.equipment_report') }}">
+        <div class="col-md-5">
+          <input type="text" name="name" class="form-control" placeholder="Search by equipment name or code..." value="{{ search_name or '' }}">
+        </div>
+        <div class="col-md-5">
+          <input type="text" name="category" class="form-control" placeholder="Search by category name..." value="{{ search_category or '' }}">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary w-100" type="submit"><i class="bi bi-search"></i> Search</button>
+        </div>
+        {% if search_name or search_category %}
+          <div class="col-md-12">
+            <a href="{{ url_for('admin.equipment_report') }}" class="btn btn-secondary w-100"><i class="bi bi-x-circle"></i> Clear Filters</a>
+          </div>
         {% endif %}
       </form>
     </div>
-    <div class="col-md-6 d-flex justify-content-end align-items-center">
+    <div class="col-md-4 d-flex justify-content-end align-items-center">
         <div>
-        <a href="{{ url_for('admin.equipment_report', name=search_name, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        <a href="{{ url_for('admin.equipment_report', name=search_name, category=search_category, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
         <!-- Print PDF will open the browser print dialog; user may choose 'Save as PDF' -->
         <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Print PDF</button>
       </div>

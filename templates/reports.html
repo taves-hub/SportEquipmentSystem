@@ -18,17 +18,17 @@
       <a href="{{ url_for('admin.issued_report') }}" style="text-decoration: none;">
         <div class="card text-center shadow-sm h-100">
           <div class="card-body">
-            <h6>Issued Items</h6>
+            <h6>Distributed Equipments</h6>
             <h3>{{ issued_count }}</h3>
           </div>
         </div>
       </a>
     </div>
     <div class="col-md-3">
-      <a href="{{ url_for('admin.issued_report') }}" style="text-decoration: none;">
+      <a href="{{ url_for('admin.issued_equipments_report') }}" style="text-decoration: none;">
         <div class="card text-center shadow-sm h-100">
           <div class="card-body">
-            <h6>Returned Items</h6>
+            <h6>Issued Equipments</h6>
             <h3>{{ returned_count }}</h3>
           </div>
         </div>
@@ -40,19 +40,6 @@
           <div class="card-body">
             <h6>Cleared Clearances</h6>
             <h3>{{ cleared_students }}</h3>
-          </div>
-        </div>
-      </a>
-    </div>
-  </div>
-
-  <div class="row mb-4">
-    <div class="col-md-3">
-      <a href="{{ url_for('admin.view_distributions') }}" style="text-decoration: none;">
-        <div class="card text-center shadow-sm h-100">
-          <div class="card-body">
-            <h6>Received Equipment</h6>
-            <h3>{{ received_equipment_count }}</h3>
           </div>
         </div>
       </a>
@@ -87,6 +74,8 @@
   </div>
 
 </div>
+
+  <!-- Distribution summary removed -->
 
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

@@ -4,31 +4,57 @@
   @media print {
     @page {
       size: A4 landscape;
-      margin: 0.3cm;
+      margin: 1cm;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 1000px !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+
+    /* Hide non-print UI elements */
+    .navbar, nav, .btn, a:not([href*="#"]), .d-flex, .row, .col-md-6 {
+      display: none !important;
+    }
+
+    .table-responsive {
+      margin: 0 auto;
     }
   }
+
+  /* Center content */
+  .container {
+    margin-left: auto;
+    margin-right: auto;
+  }
 </style>
-<div class="container py-5">
+<div class="container py-5" style="max-width: 1200px; margin: 0 auto;">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
-    <h3 class="text-primary mb-0">Issued Items Report</h3>
+    <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary btn-sm" style="width: auto; padding: 0.25rem 0.5rem;"><i class="bi bi-arrow-left"></i> Back</a>
+    <h3 class="text-primary mb-0">Distributed Equipments to Satellite Campuses Report</h3>
     <div style="width: 85px;"></div><!-- Spacer for alignment -->
   </div>
   <div class="row mb-3">
     <div class="col-md-6">
       <form method="get" class="d-flex" action="{{ url_for('admin.issued_report') }}">
-        <select name="equipment_id" class="form-select me-2">
-          <option value="All" {% if selected_equipment == 'All' %}selected{% endif %}>All Equipment</option>
-          {% for eq in equipments %}
-          <option value="{{ eq.id }}" {% if selected_equipment|string == eq.id|string %}selected{% endif %}>{{ eq.name }} ({{ eq.category }})</option>
+        <select name="campus_id" class="form-select me-2">
+          <option value="All" {% if selected_campus == 'All' %}selected{% endif %}>All Campuses</option>
+          {% for campus in campuses %}
+          <option value="{{ campus.id }}" {% if selected_campus|string == campus.id|string %}selected{% endif %}>{{ campus.name }}</option>
           {% endfor %}
         </select>
-        <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Filter</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Search</button>
       </form>
     </div>
     <div class="col-md-6 d-flex justify-content-end align-items-center">
       <div>
-        <a href="{{ url_for('admin.issued_report', equipment_id=selected_equipment, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
+        <a href="{{ url_for('admin.issued_report', campus_id=selected_campus, export='csv') }}" class="btn btn-outline-secondary me-2">Export CSV</a>
         <!-- Print PDF will open the browser print dialog; user may choose 'Save as PDF' -->
         <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Print PDF</button>
       </div>
@@ -38,54 +64,65 @@
   <table class="table table-bordered table-striped align-middle small">
     <thead class="table-dark">
       <tr>
-        <th>Recipient ID</th>
-        <th>Recipient Name</th>
-        <th>Email</th>
-        <th>Phone</th>
+        <th>Campus Name</th>
         <th>Equipment Name</th>
-        <th>Category</th>
+        <th>Category Code</th>
+        <th>Category Name</th>
         <th>Quantity</th>
-        <th>Issuer Name</th>
-        <th>Issuer Email</th>
-        <th>Issuer ID</th>
-        <th>Date Issued</th>
+        <th>Date Distributed</th>
+        <th>Distributed By</th>
+        <th>Notes</th>
       </tr>
     </thead>
     <tbody>
-      {% for issue in issued_items %}
+      {% for dist in distributions %}
       <tr>
-      <td>{{ issue.staff_payroll or issue.student_id }}</td>
-      <td>{{ (issue.staff.name if issue.staff else issue.student.name if issue.student else None) or '—' }}</td>
-      <td>{{ (issue.staff.email if issue.staff else issue.student.email if issue.student else None) or '—' }}</td>
-      <td>{{ issue.student.phone if issue.student else '—' }}</td>
-      <td>{{ issue.equipment.name if issue.equipment else issue.equipment_id }}</td>
-        <td>{{ issue.equipment.category if issue.equipment else '' }}</td>
-        <td>{{ issue.quantity }}</td>
-        <td>{{ issuer_info[issue.id]['name'] }}</td>
-        <td>{{ issuer_info[issue.id]['email'] }}</td>
-        <td>{{ issuer_info[issue.id]['id'] }}</td>
-        <td>{{ issue.date_issued.strftime('%Y-%m-%d') }}</td>
+        <td>{{ dist.campus.name if dist.campus else '—' }}</td>
+        <td>{{ dist.equipment.name if dist.equipment else dist.equipment_id }}</td>
+        <td>{{ dist.category_code }}</td>
+        <td>{{ dist.category_name }}</td>
+        <td>{{ dist.quantity }}</td>
+        <td>{{ dist.date_distributed.strftime('%Y-%m-%d') if dist.date_distributed else '—' }}</td>
+        <td>{{ dist.distributed_by or '—' }}</td>
+        <td><small>{{ dist.notes or '—' }}</small></td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="11" class="text-center text-muted">No items currently issued.</td>
+        <td colspan="8" class="text-center text-muted">No equipments distributed to campuses.</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   <!-- Pagination -->
-  {% if total_pages and total_pages > 1 %}
-  <nav aria-label="Page navigation">
+  {% if total > 0 %}
+  <nav aria-label="Page navigation" class="mt-4">
     <ul class="pagination justify-content-center">
-      <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for('admin.issued_report', equipment_id=selected_equipment, page=page-1, per_page=per_page) }}">Previous</a>
+      {% if page > 1 %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_report', campus_id=selected_campus, page=1, per_page=per_page) }}">First</a>
       </li>
-      <li class="page-item disabled"><a class="page-link">Page {{ page }} of {{ total_pages }}</a></li>
-      <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for('admin.issued_report', equipment_id=selected_equipment, page=page+1, per_page=per_page) }}">Next</a>
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_report', campus_id=selected_campus, page=page-1, per_page=per_page) }}">Previous</a>
       </li>
+      {% endif %}
+      {% for p in range(max(1, page-2), min(total_pages+1, page+3)) %}
+        {% if p == page %}
+        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+        {% else %}
+        <li class="page-item"><a class="page-link" href="{{ url_for('admin.issued_report', campus_id=selected_campus, page=p, per_page=per_page) }}">{{ p }}</a></li>
+        {% endif %}
+      {% endfor %}
+      {% if page < total_pages %}
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_report', campus_id=selected_campus, page=page+1, per_page=per_page) }}">Next</a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="{{ url_for('admin.issued_report', campus_id=selected_campus, page=total_pages, per_page=per_page) }}">Last</a>
+      </li>
+      {% endif %}
     </ul>
   </nav>
+  <div class="text-center text-muted small mt-2">Page {{ page }} of {{ total_pages }} | Total: {{ total }} distributions</div>
   {% endif %}
   </div>
 </div>

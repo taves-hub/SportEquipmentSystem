@@ -4,16 +4,42 @@
   @media print {
     @page {
       size: A4 landscape;
-      margin: 0.3cm;
+      margin: 1cm;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 1000px !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+
+    /* Hide non-print UI elements */
+    .navbar, nav, .btn, a:not([href*="#"]), .d-flex, .row, .col-md-6 {
+      display: none !important;
+    }
+
+    .table-responsive {
+      margin: 0 auto;
     }
   }
+
+  /* Center content */
+  .container {
+    margin-left: auto;
+    margin-right: auto;
+  }
 </style>
-<div class="container py-5">
+<div class="container py-5" style="max-width: 1200px; margin: 0 auto;">
   <div class="d-flex justify-content-between align-items-center mb-4">
     {% if recipient_id %}
-      <a href="{{ url_for('admin.clearance_report') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Clearance</a>
+      <a href="{{ url_for('admin.clearance_report') }}" class="btn btn-secondary btn-sm" style="width: auto; padding: 0.25rem 0.5rem;"><i class="bi bi-arrow-left"></i> Back to Clearance</a>
     {% else %}
-      <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+      <a href="{{ url_for('admin.reports') }}" class="btn btn-secondary btn-sm" style="width: auto; padding: 0.25rem 0.5rem;"><i class="bi bi-arrow-left"></i> Back</a>
     {% endif %}
     <h3 class="text-success mb-0">Returned Items Report{% if recipient_id %} - {{ recipient_id }}{% endif %}</h3>
     <div style="width: 85px;"></div><!-- Spacer for alignment -->

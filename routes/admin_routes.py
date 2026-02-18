@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify, session, abort, current_app
 from flask_login import login_required, current_user
 from extensions import db
-from models import Admin, StoreKeeper, Equipment, IssuedEquipment, Clearance, Student, Staff, SatelliteCampus, EquipmentCategory, CampusDistribution
+from models import Admin, StoreKeeper, Equipment, IssuedEquipment, Clearance, Student, Staff, SatelliteCampus, EquipmentCategory, CampusDistribution, AccessLog
 from datetime import datetime, UTC, timedelta
 import os
 from werkzeug.utils import secure_filename
@@ -34,36 +34,78 @@ def _require_admin():
         # if a storekeeper is logged in, redirect them to their dashboard
         from flask import redirect, url_for
         return redirect(url_for('storekeeper.dashboard'))
+    
+    # Log access for audit trail
+    try:
+        from flask import session
+        import socket
 
-@admin_bp.route('/api/notifications/unread-count')
-@login_required
-def unread_notifications_count():
-    """API endpoint to get unread notifications count for admin"""
-    from models import Notification
-    unread = Notification.query.filter_by(recipient_role='admin', is_read=False).count()
-    return jsonify({'count': unread})
+        # Get user full name
+        full_name = getattr(current_user, 'username', 'Unknown')  # Admin uses username as display name
 
-@admin_bp.route('/api/notifications')
-@login_required
-def get_notifications():
-    """API endpoint to get all unread notifications for admin"""
-    from models import Notification
-    notifs = Notification.query.filter_by(recipient_role='admin', is_read=False).order_by(Notification.created_at.desc()).limit(10).all()
-    return jsonify([
-        {'id': n.id, 'message': n.message, 'url': n.url, 'created_at': n.created_at.isoformat()}
-        for n in notifs
-    ])
+        # Get session ID
+        session_id = session.get('session_id', session.sid if hasattr(session, 'sid') else None)
 
-@admin_bp.route('/api/notifications/<int:notif_id>/read', methods=['POST'])
-@login_required
-def mark_notification_read(notif_id):
-    """API endpoint to mark a notification as read"""
-    from models import Notification
-    notif = Notification.query.get(notif_id)
-    if notif:
-        notif.is_read = True
+        # Parse User Agent for device/browser info
+        user_agent = request.headers.get('User-Agent', '')
+
+        # Get server hostname
+        server_hostname = socket.gethostname()
+
+        # Determine protocol
+        protocol = 'HTTPS' if request.is_secure else 'HTTP'
+
+        # Get referrer URL
+        referrer_url = request.referrer
+
+        # Create comprehensive log entry
+        log = AccessLog(
+            # 1. USER IDENTIFICATION
+            user_id=current_user.id,
+            user_type='admin',
+            username=current_user.username,
+            full_name=full_name,
+
+            # 2. TIMESTAMP
+            timezone='UTC',
+
+            # 3. SOURCE INFORMATION
+            ip_address=request.remote_addr,
+            user_agent=user_agent,
+
+            # 4. ACTION PERFORMED
+            action=f"Accessed {request.endpoint or 'unknown'}",
+            endpoint=request.endpoint,
+            method=request.method,
+            action_status='Success',
+
+            # 5. AUTHENTICATION DETAILS
+            auth_method='password',
+            session_id=session_id,
+            mfa_used=False,
+
+            # 6. SYSTEM/APPLICATION DETAILS
+            app_name='SportEquipmentSystem',
+            module=request.endpoint.split('.')[-1] if request.endpoint else 'unknown',
+            server_hostname=server_hostname,
+            protocol=protocol,
+
+            # 9. ADDITIONAL METADATA
+            referrer_url=referrer_url,
+
+            # 10. AUDIT TRAIL
+            is_tamper_proof=True
+        )
+
+        # Generate integrity hash
+        log.log_hash = log.generate_log_hash()
+
+        db.session.add(log)
         db.session.commit()
-    return jsonify({'success': True})
+    except Exception as e:
+        # Don't let logging errors break the app
+        db.session.rollback()
+        pass
 
 @admin_bp.route('/dashboard')
 @login_required
@@ -156,10 +198,6 @@ def dashboard():
     
     escalated_count = len(escalated_items)
 
-    # Get unread notifications count
-    from models import Notification
-    unread_count = Notification.query.filter_by(recipient_role='admin', is_read=False).count()
-
     return render_template('dashboard.html',
                            total_equipment=total_equipment,
                            total_satellite_campuses=total_satellite_campuses,
@@ -174,8 +212,7 @@ def dashboard():
                            escalated_count=escalated_count,
                            escalated_items=escalated_items,
                            total_distributions_count=total_distributions_count,
-                           total_distributed_quantity=total_distributed_quantity,
-                           unread_notifications=unread_count)
+                           total_distributed_quantity=total_distributed_quantity)
 
 @admin_bp.route('/equipment', methods=['GET', 'POST'])
 @login_required
@@ -1075,17 +1112,6 @@ def clearance_rollback(recipient_id):
     except Exception:
         pass
 
-    # Create notifications for affected storekeepers
-    try:
-        from models import Notification
-        for sk_id in notified_storekeepers:
-            notif = Notification(recipient_role='storekeeper', recipient_id=sk_id,
-                                 message=f"Admin marked {len(marked)} item(s) for review for recipient {recipient_id}.",
-                                 url=url_for('storekeeper.damage_clearance'))
-            db.session.add(notif)
-    except Exception:
-        pass
-
     try:
         db.session.commit()
         flash(f'Marked {len(marked)} item(s) for review and rolled back clearance to Pending.', 'success')
@@ -1828,7 +1854,51 @@ def reports():
     issued_count = IssuedEquipment.query.filter_by(status='Issued').count()
     returned_count = IssuedEquipment.query.filter_by(status='Returned').count()
     cleared_students = Clearance.query.filter_by(status='Cleared').count()
-    received_equipment_count = CampusDistribution.query.count()
+
+    # Distribution summary: total distributed per campus and distinct equipment count
+    try:
+        dist_rows = (
+            db.session.query(
+                SatelliteCampus.name.label('campus'),
+                func.coalesce(func.sum(CampusDistribution.quantity), 0).label('total_distributed'),
+                func.count(distinct(CampusDistribution.equipment_id)).label('distinct_equipment')
+            )
+            .join(SatelliteCampus, CampusDistribution.campus_id == SatelliteCampus.id)
+            .group_by(SatelliteCampus.name)
+            .order_by(func.sum(CampusDistribution.quantity).desc())
+            .all()
+        )
+
+        distribution_summary = [
+            {
+                'campus': r.campus,
+                'total_distributed': int(r.total_distributed or 0),
+                'distinct_equipment': int(r.distinct_equipment or 0)
+            }
+            for r in dist_rows
+        ]
+    except Exception:
+        distribution_summary = []
+
+    # Top distributed equipment across all campuses
+    try:
+        top_eq_rows = (
+            db.session.query(
+                Equipment.name.label('equipment'),
+                func.coalesce(func.sum(CampusDistribution.quantity), 0).label('total')
+            )
+            .join(Equipment, CampusDistribution.equipment_id == Equipment.id)
+            .group_by(Equipment.name)
+            .order_by(func.sum(CampusDistribution.quantity).desc())
+            .limit(10)
+            .all()
+        )
+
+        top_distributed = [
+            {'equipment': r.equipment, 'total': int(r.total or 0)} for r in top_eq_rows
+        ]
+    except Exception:
+        top_distributed = []
 
     return render_template(
         'reports.html',
@@ -1836,14 +1906,123 @@ def reports():
         issued_count=issued_count,
         returned_count=returned_count,
         cleared_students=cleared_students,
-        received_equipment_count=received_equipment_count
+        distribution_summary=distribution_summary,
+        top_distributed=top_distributed
     )
+
+@admin_bp.route('/access_logs')
+@login_required
+def access_logs():
+    """Display system access logs for audit trail"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 25, type=int)
+    user_type_filter = request.args.get('user_type', '', type=str)  # Filter by 'admin', 'storekeeper', or ''
+    action_filter = request.args.get('action', '', type=str)  # Search in action description
+    selected_user_id = request.args.get('user_id', type=int)
+    
+    # If a specific user_id is provided, show detailed, paginated logs for that user
+    if selected_user_id:
+        query = AccessLog.query.filter_by(user_id=selected_user_id)
+        if user_type_filter:
+            query = query.filter_by(user_type=user_type_filter)
+        if action_filter:
+            query = query.filter(AccessLog.action.ilike(f"%{action_filter}%"))
+
+        logs = query.order_by(AccessLog.timestamp.desc()).paginate(page=page, per_page=per_page, error_out=False)
+
+        # Prepare a small selected_user dict for template header
+        selected_user = None
+        try:
+            recent = AccessLog.query.filter_by(user_id=selected_user_id).order_by(AccessLog.timestamp.desc()).first()
+            if recent:
+                selected_user = {
+                    'user_id': recent.user_id,
+                    'user_type': recent.user_type,
+                    'username': recent.username,
+                    'full_name': recent.full_name
+                }
+        except Exception:
+            selected_user = None
+
+        return render_template(
+            'access_logs.html',
+            logs=logs,
+            user_type_filter=user_type_filter,
+            action_filter=action_filter,
+            per_page=per_page,
+            selected_user=selected_user
+        )
+
+    # Otherwise, present an aggregated per-user summary (group by user)
+    try:
+        rows = db.session.query(
+            AccessLog.user_type,
+            AccessLog.user_id,
+            AccessLog.username,
+            AccessLog.full_name,
+            func.count(AccessLog.id).label('log_count'),
+            func.max(AccessLog.timestamp).label('last_seen'),
+            func.max(AccessLog.action).label('last_action')
+        )
+        if user_type_filter:
+            rows = rows.filter(AccessLog.user_type == user_type_filter)
+        if action_filter:
+            rows = rows.filter(AccessLog.action.ilike(f"%{action_filter}%"))
+
+        rows = rows.group_by(AccessLog.user_type, AccessLog.user_id, AccessLog.username, AccessLog.full_name)
+        rows = rows.order_by(func.max(AccessLog.timestamp).desc())
+        summary_list = rows.all()
+    except Exception:
+        summary_list = []
+
+    # Simple pagination for the aggregated list
+    total = len(summary_list)
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_items = summary_list[start:end]
+
+    # Build a lightweight pagination dict for template consumption
+    pages = (total + per_page - 1) // per_page if per_page else 1
+    user_summaries = {
+        'items': page_items,
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pages,
+        'pages_list': list(range(1, pages + 1)),
+        'has_prev': page > 1,
+        'has_next': end < total
+    }
+
+    return render_template(
+        'access_logs.html',
+        user_summaries=user_summaries,
+        user_type_filter=user_type_filter,
+        action_filter=action_filter,
+        per_page=per_page
+    )
+
+@admin_bp.route('/access_logs/clear', methods=['POST'])
+@login_required
+def clear_access_logs():
+    """Clear all access logs from the database"""
+    try:
+        # Delete all access logs
+        deleted_count = AccessLog.query.delete()
+        db.session.commit()
+        
+        flash(f'Successfully cleared {deleted_count} access logs from the audit trail.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error clearing access logs: {str(e)}', 'error')
+    
+    return redirect(url_for('admin.access_logs'))
 
 @admin_bp.route('/issued_report')
 @login_required
 def issued_report():
-    # Allow filtering by equipment via query string: ?equipment_id=<id>&page=1&per_page=25&export=csv|excel
-    equipment_id = request.args.get('equipment_id', 'All')
+    # Now shows distributed equipments to satellite campuses
+    campus_id = request.args.get('campus_id', 'All')
     try:
         page = int(request.args.get('page', 1))
     except ValueError:
@@ -1854,13 +2033,15 @@ def issued_report():
         per_page = 25
     export = request.args.get('export')
 
-    equipments = Equipment.query.order_by(Equipment.name).all()
+    # Get all campuses for filter dropdown
+    campuses = SatelliteCampus.query.filter_by(is_active=True).order_by(SatelliteCampus.name).all()
 
-    base_q = IssuedEquipment.query.filter_by(status='Issued')
-    if equipment_id and equipment_id != 'All':
+    # Base query for campus distributions
+    base_q = CampusDistribution.query
+    if campus_id and campus_id != 'All':
         try:
-            eq_id = int(equipment_id)
-            base_q = base_q.filter_by(equipment_id=eq_id)
+            c_id = int(campus_id)
+            base_q = base_q.filter_by(campus_id=c_id)
         except ValueError:
             pass
 
@@ -1869,81 +2050,38 @@ def issued_report():
 
     # Export unpaginated full filtered results
     if export in ('csv', 'excel'):
-        items = base_q.order_by(IssuedEquipment.date_issued.desc()).all()
-        issuer_info = {}
-        for item in items:
-            if item.issued_by:
-                admin = Admin.query.filter_by(username=item.issued_by).first()
-                if admin:
-                    issuer_info[item.id] = {'name': admin.username, 'email': admin.email, 'id': admin.id}
-                else:
-                    storekeeper = StoreKeeper.query.filter_by(payroll_number=item.issued_by).first()
-                    if storekeeper:
-                        issuer_info[item.id] = {'name': storekeeper.full_name, 'email': storekeeper.email, 'id': storekeeper.id}
-                    else:
-                        issuer_info[item.id] = {'name': item.issued_by, 'email': '—', 'id': '—'}
-            else:
-                issuer_info[item.id] = {'name': '—', 'email': '—', 'id': '—'}
+        items = base_q.order_by(CampusDistribution.date_distributed.desc()).all()
         # Build CSV
         import csv
         from io import StringIO
         si = StringIO()
         writer = csv.writer(si)
-        writer.writerow(['Recipient ID', 'Recipient Name', 'Email', 'Phone', 'Equipment Name', 'Category', 'Quantity', 'Date Issued', 'Issuer Name', 'Issuer Email', 'Issuer ID'])
-        for issue in items:
-            recipient_id = issue.staff_payroll or issue.student_id
-            recipient_name = ''
-            recipient_email = ''
-            recipient_phone = ''
-            if issue.student:
-                recipient_name = issue.student.name
-                recipient_email = issue.student.email
-                recipient_phone = issue.student.phone
-            elif issue.staff:
-                recipient_name = issue.staff.name
-                recipient_email = issue.staff.email
+        writer.writerow(['Campus Name', 'Equipment Name', 'Category Code', 'Category Name', 'Quantity', 'Date Distributed', 'Distributed By', 'Notes'])
+        for dist in items:
             writer.writerow([
-                recipient_id,
-                recipient_name,
-                recipient_email or '—',
-                recipient_phone or '—',
-                issue.equipment.name if issue.equipment else issue.equipment_id,
-                issue.equipment.category if issue.equipment else '',
-                issue.quantity,
-                issue.date_issued.strftime('%Y-%m-%d'),
-                issuer_info[issue.id]['name'],
-                issuer_info[issue.id]['email'],
-                issuer_info[issue.id]['id']
+                dist.campus.name if dist.campus else '—',
+                dist.equipment.name if dist.equipment else dist.equipment_id,
+                dist.category_code,
+                dist.category_name,
+                dist.quantity,
+                dist.date_distributed.strftime('%Y-%m-%d') if dist.date_distributed else '—',
+                dist.distributed_by or '—',
+                dist.notes or '—'
             ])
         output = si.getvalue()
         si.close()
         from flask import Response
         if export == 'csv':
             mimetype = 'text/csv'
-            fname = 'issued_items.csv'
+            fname = 'distributed_equipments.csv'
         else:
             mimetype = 'application/vnd.ms-excel'
-            fname = 'issued_items.xls'
+            fname = 'distributed_equipments.xls'
         return Response(output, mimetype=mimetype, headers={"Content-Disposition": f"attachment;filename={fname}"})
 
-    items = base_q.order_by(IssuedEquipment.date_issued.desc()).offset((page-1)*per_page).limit(per_page).all()
+    items = base_q.order_by(CampusDistribution.date_distributed.desc()).offset((page-1)*per_page).limit(per_page).all()
 
-    issuer_info = {}
-    for item in items:
-        if item.issued_by:
-            admin = Admin.query.filter_by(username=item.issued_by).first()
-            if admin:
-                issuer_info[item.id] = {'name': admin.username, 'email': admin.email, 'id': admin.id}
-            else:
-                storekeeper = StoreKeeper.query.filter_by(payroll_number=item.issued_by).first()
-                if storekeeper:
-                    issuer_info[item.id] = {'name': storekeeper.full_name, 'email': storekeeper.email, 'id': storekeeper.id}
-                else:
-                    issuer_info[item.id] = {'name': item.issued_by, 'email': '—', 'id': '—'}
-        else:
-            issuer_info[item.id] = {'name': '—', 'email': '—', 'id': '—'}
-
-    return render_template('issued_report.html', issued_items=items, equipments=equipments, selected_equipment=equipment_id, page=page, per_page=per_page, total=total, total_pages=total_pages, issuer_info=issuer_info)
+    return render_template('issued_report.html', distributions=items, campuses=campuses, selected_campus=campus_id, page=page, per_page=per_page, total=total, total_pages=total_pages, max=max, min=min, range=range)
 
 @admin_bp.route('/api/inventory_top')
 @login_required
@@ -2022,10 +2160,107 @@ def api_issues_timeseries():
 
     return jsonify(labels=labels, issued=issued_data, returned=returned_data)
 
+@admin_bp.route('/issued-equipments-report')
+@login_required
+def issued_equipments_report():
+    """Report of equipments issued to students/staff with campus name, clearance status, and condition filters."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    campus_id = request.args.get('campus_id', '')
+    clearance_status = request.args.get('clearance_status', 'All')
+    condition = request.args.get('condition', 'All')
+    export_format = request.args.get('export')
+
+    # Get all active campuses for dropdown
+    all_campuses = SatelliteCampus.query.filter_by(is_active=True).order_by(SatelliteCampus.name).all()
+    
+    # Build base query
+    base_q = IssuedEquipment.query
+    
+    # Filter by clearance status if selected
+    if clearance_status and clearance_status != 'All':
+        base_q = base_q.filter_by(damage_clearance_status=clearance_status)
+    
+    # Filter by condition if selected
+    if condition and condition != 'All':
+        base_q = base_q.filter_by(return_conditions=condition)
+    
+    # Filter by campus if selected
+    all_items = base_q.order_by(IssuedEquipment.date_issued.desc()).all()
+    
+    if campus_id:
+        filtered_items = []
+        try:
+            selected_campus_obj = SatelliteCampus.query.get(int(campus_id))
+            if selected_campus_obj:
+                selected_campus_name = selected_campus_obj.name
+                for item in all_items:
+                    campus_display = ''
+                    if item.staff and hasattr(item.staff, 'campus') and item.staff.campus:
+                        campus_display = item.staff.campus.name
+                    elif item.student and hasattr(item.student, 'campus') and item.student.campus:
+                        campus_display = item.student.campus.name
+                    
+                    if campus_display == selected_campus_name:
+                        filtered_items.append(item)
+                all_items = filtered_items
+        except (ValueError, TypeError):
+            pass
+    
+    # Get total count
+    total = len(all_items)
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    
+    # CSV Export
+    if export_format == 'csv':
+        output = 'Recipient ID,Recipient Name,Recipient Type,Campus,Equipment Name,Category,Quantity,Date Issued,Status,Condition,Clearance Status,Notes\n'
+        for item in all_items:
+            recipient_id = item.staff_payroll or item.student_id
+            recipient_name = (item.staff.name if item.staff else item.student.name if item.student else '')
+            recipient_type = 'Staff' if item.staff else 'Student' if item.student else ''
+            campus_display = ''
+            if item.staff and hasattr(item.staff, 'campus') and item.staff.campus:
+                campus_display = item.staff.campus.name
+            elif item.student and hasattr(item.student, 'campus') and item.student.campus:
+                campus_display = item.student.campus.name
+            equipment_name = item.equipment.name if item.equipment else item.equipment_id
+            category = item.equipment.category if item.equipment else ''
+            condition_str = item.return_conditions or ''
+            clearance_status_str = item.damage_clearance_status or ''
+            output += f'{recipient_id},{recipient_name},{recipient_type},{campus_display},{equipment_name},{category},{item.quantity},{item.date_issued.strftime("%Y-%m-%d")},{item.status},{condition_str},{clearance_status_str},{item.damage_clearance_notes or ""}\n'
+        return Response(output, mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=issued_equipments.csv"})
+    
+    # Paginate
+    items = all_items[(page-1)*per_page:page*per_page]
+    
+    # Unique conditions and clearance statuses for filter dropdowns
+    # All possible equipment conditions in the system
+    conditions = ['Good', 'Damaged', 'Lost']
+    
+    # All possible clearance statuses in the system
+    clearance_statuses = ['Pending Clearance', 'Cleared', 'Repaired', 'Replaced', 'Escalated']
+    
+    return render_template('issued_equipments_report.html', 
+                         items=items, 
+                         campuses=all_campuses,
+                         conditions=conditions,
+                         clearance_statuses=clearance_statuses,
+                         selected_campus=campus_id,
+                         selected_condition=condition,
+                         selected_clearance=clearance_status,
+                         page=page, 
+                         per_page=per_page, 
+                         total=total, 
+                         total_pages=total_pages,
+                         max=max, 
+                         min=min, 
+                         range=range)
+
 @admin_bp.route('/equipment-report')
 @login_required
 def equipment_report():
     search_name = request.args.get('name', '').strip()
+    search_category = request.args.get('category', '').strip()
     export_format = request.args.get('export')
 
     # Base query
@@ -2039,6 +2274,10 @@ def equipment_report():
                 Equipment.category_code.ilike(f"%{search_name}%")
             )
         )
+
+    # Apply category name filter if provided
+    if search_category:
+        base_q = base_q.filter(Equipment.category.ilike(f"%{search_category}%"))
 
     # Fetch all results (unpaginated)
     equipments = base_q.order_by(Equipment.category, Equipment.name).all()
@@ -2094,7 +2333,8 @@ def equipment_report():
 
     return render_template('equipment_report.html',
                          equipments=equipments,
-                         search_name=search_name)
+                         search_name=search_name,
+                         search_category=search_category)
 
 
 @admin_bp.route('/distribute-to-campus', methods=['GET', 'POST'])
@@ -2416,7 +2656,7 @@ def approve_storekeeper(user_id):
         flash('This storekeeper is already approved.', 'info')
     else:
         storekeeper.is_approved = True
-        storekeeper.approved_at = datetime.utcnow
+        storekeeper.approved_at = datetime.utcnow()
         db.session.commit()
         flash(f'Storekeeper "{storekeeper.full_name}" has been approved successfully.', 'success')
     
@@ -2544,17 +2784,6 @@ def process_escalated_damage(issue_id):
         # Reject clearance - send back to storekeeper for further action
         issue.damage_clearance_status = 'Pending'  # Reset to pending for storekeeper to reconsider
         issue.damage_clearance_notes = f"{issue.damage_clearance_notes or ''}\n[Admin Rejected] {admin_notes}"
-        # Create a notification for the originating storekeeper (if known)
-        try:
-            from models import Notification, StoreKeeper
-            storekeeper = StoreKeeper.query.filter_by(payroll_number=issue.issued_by).first()
-            if storekeeper:
-                notif = Notification(recipient_role='storekeeper', recipient_id=storekeeper.id,
-                                     message=f"Admin rejected clearance for issue {issue.id}.",
-                                     url=url_for('storekeeper.damage_clearance'))
-                db.session.add(notif)
-        except Exception:
-            pass
         db.session.commit()
         flash('Damage clearance rejected. Sent back to storekeeper.', 'info')
 

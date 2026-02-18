@@ -80,7 +80,7 @@
                   {% endif %}
                 </td>
                 <td class="text-center">
-                  {% if item.status in ('Issued', 'Partial Return') %}
+                  {% if item.status in ('Issued', 'Partial Return') and request.endpoint == 'storekeeper.issued_equipment' %}
                     <a href="{{ url_for('storekeeper.return_equipment', return_recipient=(item.student_id or item.staff_payroll)) }}" class="btn btn-sm btn-outline-primary" title="Return equipment">Return</a>
                   {% else %}
                     <span class="text-muted small">—</span>

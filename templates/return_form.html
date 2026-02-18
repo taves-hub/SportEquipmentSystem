@@ -1,6 +1,34 @@
 
 {% extends 'base.html' %}
 {% block content %}
+<style>
+  @media print {
+    @page {
+      size: A4;
+      margin: 1cm;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 800px !important;
+      margin: 0 auto !important;
+      padding: 20px !important;
+    }
+
+    .navbar, nav, .btn:not([style*="print"]) {
+      display: none !important;
+    }
+  }
+
+  .container {
+    margin-left: auto;
+    margin-right: auto;
+  }
+</style>
 <div class="container py-5">
   <h4 class="text-center mb-3">Return Equipment</h4>
   <div class="card p-4">

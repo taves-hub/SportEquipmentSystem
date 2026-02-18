@@ -64,6 +64,19 @@
       max-width: 100%;
     }
   }
+
+  /* Modal positioning for desktop/laptop/big screen */
+  @media (min-width: 768px) {
+    #addEquipmentModal .modal-dialog {
+      margin-left: 25%;
+      margin-right: 25%;
+      width: 50%;
+      max-width: none;
+      display: flex;
+      align-items: center;
+      min-height: calc(100vh - 3.5rem);
+    }
+  }
 </style>
 <div class="container py-5">
   <h4 class="text-center mb-4">Distribute Equipment to Satellite Campus</h4>
@@ -156,7 +169,7 @@
 
 <!-- Add Equipment Modal -->
 <div class="modal fade" id="addEquipmentModal" tabindex="-1" aria-labelledby="addEquipmentModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog">
     <div class="modal-content">
       <form method="post" action="{{ url_for('admin.equipment') }}" id="addEquipmentForm">
         <div class="modal-header">

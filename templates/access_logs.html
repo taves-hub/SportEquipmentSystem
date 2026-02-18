@@ -1,0 +1,473 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid py-4">
+    <h3 class="text-dark mb-4">
+        <i class="bi bi-shield-check"></i> Access Logs & Audit Trail
+    </h3>
+
+    <!-- Filters -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h6 class="card-title">Filters</h6>
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="user_type" class="form-label">User Type</label>
+                    <select class="form-select" id="user_type" name="user_type">
+                        <option value="">All Users</option>
+                        <option value="admin" {% if user_type_filter == 'admin' %}selected{% endif %}>Admin</option>
+                        <option value="storekeeper" {% if user_type_filter == 'storekeeper' %}selected{% endif %}>Storekeeper</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="action_filter" class="form-label">Action Search</label>
+                    <input type="text" class="form-control" id="action_filter" name="action" placeholder="Search actions..." value="{{ action_filter or '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="per_page" class="form-label">Rows per page</label>
+                    <select class="form-select" id="per_page" name="per_page">
+                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
+                </div>
+                <div class="col-md-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Filter
+                    </button>
+                    <a href="{{ url_for('admin.access_logs') }}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-counterclockwise"></i> Reset
+                    </a>
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#clearLogsModal">
+                        <i class="bi bi-trash"></i> Clear All Logs
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Clear Logs Confirmation Modal -->
+    <div class="modal fade" id="clearLogsModal" tabindex="-1" aria-labelledby="clearLogsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="clearLogsModalLabel">
+                        <i class="bi bi-exclamation-triangle text-warning"></i> Clear All Access Logs
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Are you sure you want to clear all access logs?</p>
+                    <div class="alert alert-warning">
+                        <strong>Warning:</strong> This action cannot be undone. All audit trail data will be permanently deleted.
+                    </div>
+                    <p class="text-muted small">This will remove all access logs for both admin and storekeeper users.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form method="POST" action="{{ url_for('admin.clear_access_logs') }}" style="display: inline;">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Yes, Clear All Logs
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Access Logs / User Summary -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            {% if selected_user %}
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="mb-0">Showing logs for: <strong>{{ selected_user.username }}</strong>
+                        {% if selected_user.full_name %} - <small class="text-muted">{{ selected_user.full_name }}</small>{% endif %}
+                    </h5>
+                </div>
+                <div>
+                    <a href="{{ url_for('admin.access_logs') }}" class="btn btn-sm btn-outline-secondary">← Back to user summary</a>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 8%;">ID</th>
+                            <th style="width: 12%;">Timestamp</th>
+                            <th style="width: 8%;">User Type</th>
+                            <th style="width: 10%;">Username</th>
+                            <th style="width: 12%;">Full Name</th>
+                            <th style="width: 15%;">Action</th>
+                            <th style="width: 8%;">Method</th>
+                            <th style="width: 10%;">IP Address</th>
+                            <th style="width: 8%;">Status</th>
+                            <th style="width: 9%;">Module</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs.items %}
+                        <tr>
+                            <td><small class="text-muted">{{ log.id }}</small></td>
+                            <td><small class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small><br><small class="text-muted">{{ log.timezone }}</small></td>
+                            <td>
+                                {% if log.user_type == 'admin' %}
+                                    <span class="badge bg-danger">Admin</span>
+                                {% elif log.user_type == 'storekeeper' %}
+                                    <span class="badge bg-info">Storekeeper</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ log.user_type }}</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ log.username }}</strong></td>
+                            <td>{% if log.full_name %}<small>{{ log.full_name }}</small>{% else %}<small class="text-muted">-</small>{% endif %}</td>
+                            <td>{% if log.action %}<small>{{ log.action }}</small>{% else %}<small class="text-muted">-</small>{% endif %}</td>
+                            <td>
+                                {% if log.method == 'GET' %}
+                                    <span class="badge bg-primary">{{ log.method }}</span>
+                                {% elif log.method == 'POST' %}
+                                    <span class="badge bg-success">{{ log.method }}</span>
+                                {% elif log.method == 'PUT' %}
+                                    <span class="badge bg-info">{{ log.method }}</span>
+                                {% elif log.method == 'DELETE' %}
+                                    <span class="badge bg-danger">{{ log.method }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ log.method }}</span>
+                                {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ log.ip_address or '-' }}</small></td>
+                            <td>
+                                {% if log.action_status == 'Success' %}
+                                    <span class="badge bg-success">✓ Success</span>
+                                {% elif log.action_status == 'Failure' %}
+                                    <span class="badge bg-danger">✗ Failed</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ log.action_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if log.module %}<small>{{ log.module }}</small>{% else %}<small class="text-muted">-</small>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if logs.pages > 1 %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if logs.has_prev %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.access_logs', page=1, user_type=user_type_filter, action=action_filter, per_page=per_page, user_id=selected_user.user_id) }}">First</a></li>
+                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.access_logs', page=logs.prev_num, user_type=user_type_filter, action=action_filter, per_page=per_page, user_id=selected_user.user_id) }}">Previous</a></li>
+                    {% endif %}
+                    {% for page_num in logs.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num == logs.page %}
+                            <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                            {% else %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('admin.access_logs', page=page_num, user_type=user_type_filter, action=action_filter, per_page=per_page, user_id=selected_user.user_id) }}">{{ page_num }}</a></li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if logs.has_next %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.access_logs', page=logs.next_num, user_type=user_type_filter, action=action_filter, per_page=per_page, user_id=selected_user.user_id) }}">Next</a></li>
+                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.access_logs', page=logs.pages, user_type=user_type_filter, action=action_filter, per_page=per_page, user_id=selected_user.user_id) }}">Last</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% elif user_summaries %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>User Type</th>
+                            <th>Username</th>
+                            <th>Full Name</th>
+                            <th>Log Count</th>
+                            <th>Last Seen</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in user_summaries['items'] %}
+                        <tr>
+                            <td>{{ (user_summaries['page'] - 1) * user_summaries['per_page'] + loop.index }}</td>
+                            <td>
+                                {% if item.user_type == 'admin' %}
+                                    <span class="badge bg-danger">Admin</span>
+                                {% elif item.user_type == 'storekeeper' %}
+                                    <span class="badge bg-info">Storekeeper</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ item.user_type }}</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ item.username }}</strong></td>
+                            <td><small class="text-muted">{{ item.full_name or '-' }}</small></td>
+                            <td><strong>{{ item.log_count }}</strong></td>
+                            <td><small class="text-muted">{{ item.last_seen.strftime('%Y-%m-%d %H:%M:%S') if item.last_seen else '-' }}</small></td>
+                            <td>
+                                <a href="{{ url_for('admin.access_logs', user_id=item.user_id, user_type=item.user_type) }}" class="btn btn-sm btn-primary">View</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if user_summaries['pages'] > 1 %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if user_summaries['has_prev'] %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=1, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">First</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=user_summaries['page']-1, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">Previous</a>
+                    </li>
+                    {% endif %}
+
+                    {% for p in user_summaries['pages_list'] %}
+                        {% if p == user_summaries['page'] %}
+                        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                        {% else %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.access_logs', page=p, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">{{ p }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if user_summaries['has_next'] %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=user_summaries['page']+1, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">Next</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=user_summaries['pages'], user_type=user_type_filter, action=action_filter, per_page=per_page) }}">Last</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            <div class="text-center text-muted small mt-3">Showing {{ user_summaries['total'] }} users</div>
+
+            {% elif logs and logs.items %}
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <h6 class="text-primary"><i class="bi bi-globe"></i> Source Information</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>IP Address:</strong></td><td id="ipAddress"></td></tr>
+                                        <tr><td><strong>User Agent:</strong></td><td><small id="userAgent"></small></td></tr>
+                                        <tr><td><strong>Geolocation:</strong></td><td id="geolocation"></td></tr>
+                                        <tr><td><strong>Referrer URL:</strong></td><td><small id="referrerUrl"></small></td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-primary"><i class="bi bi-gear"></i> Action Performed</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Action:</strong></td><td id="action"></td></tr>
+                                        <tr><td><strong>Resource:</strong></td><td id="endpoint"></td></tr>
+                                        <tr><td><strong>HTTP Method:</strong></td><td id="method"></td></tr>
+                                        <tr><td><strong>Status Code:</strong></td><td id="statusCode"></td></tr>
+                                        <tr><td><strong>Action Status:</strong></td><td id="actionStatus"></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <h6 class="text-primary"><i class="bi bi-shield-lock"></i> Authentication</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Auth Method:</strong></td><td id="authMethod"></td></tr>
+                                        <tr><td><strong>Session ID:</strong></td><td><small id="sessionId"></small></td></tr>
+                                        <tr><td><strong>Login Attempts:</strong></td><td id="loginAttempts"></td></tr>
+                                        <tr><td><strong>MFA Used:</strong></td><td id="mfaUsed"></td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-primary"><i class="bi bi-server"></i> System Details</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Application:</strong></td><td id="appName"></td></tr>
+                                        <tr><td><strong>Module:</strong></td><td id="module"></td></tr>
+                                        <tr><td><strong>Server:</strong></td><td id="serverHostname"></td></tr>
+                                        <tr><td><strong>Protocol:</strong></td><td id="protocol"></td></tr>
+                                        <tr><td><strong>Data Size:</strong></td><td id="dataSize"></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <h6 class="text-primary"><i class="bi bi-database"></i> Data Tracking</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Record ID:</strong></td><td id="recordId"></td></tr>
+                                        <tr><td><strong>Data Changed:</strong></td><td><small id="dataChanged"></small></td></tr>
+                                        <tr><td><strong>Query Executed:</strong></td><td><small id="queryExecuted"></small></td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-primary"><i class="bi bi-check-circle"></i> Security & Compliance</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Alerts Triggered:</strong></td><td id="alertsTriggered"></td></tr>
+                                        <tr><td><strong>Log Hash:</strong></td><td><small id="logHash"></small></td></tr>
+                                        <tr><td><strong>Retention:</strong></td><td id="retentionDays"></td></tr>
+                                        <tr><td><strong>Tamper Proof:</strong></td><td id="tamperProof"></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            {% if logs.pages > 1 %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if logs.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=1, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">First</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=logs.prev_num, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">Previous</a>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in logs.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num == logs.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.access_logs', page=page_num, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">{{ page_num }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if logs.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=logs.next_num, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">Next</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.access_logs', page=logs.pages, user_type=user_type_filter, action=action_filter, per_page=per_page) }}">Last</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            <div class="text-center text-muted small mt-3">
+                Showing {{ logs.total }} total access logs
+            </div>
+            {% else %}
+            <div class="alert alert-info" role="alert">
+                <i class="bi bi-info-circle"></i> No access logs found matching your filters.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Function to show detailed log information
+function showLogDetails(logData) {
+    // User Identification
+    document.getElementById('logId').textContent = logData.id;
+    document.getElementById('userId').textContent = logData.user_id;
+    document.getElementById('userType').textContent = logData.user_type;
+    document.getElementById('username').textContent = logData.username;
+    document.getElementById('fullName').textContent = logData.full_name || '-';
+    document.getElementById('accessLevel').textContent = logData.access_level || '-';
+
+    // Timestamp
+    const timestamp = new Date(logData.timestamp);
+    document.getElementById('timestamp').textContent = timestamp.toLocaleString();
+    document.getElementById('timezone').textContent = logData.timezone;
+    document.getElementById('duration').textContent = logData.duration_ms ? logData.duration_ms + ' ms' : '-';
+
+    // Source Information
+    document.getElementById('ipAddress').textContent = logData.ip_address || '-';
+    document.getElementById('userAgent').textContent = logData.user_agent || '-';
+    document.getElementById('geolocation').textContent = logData.geolocation || '-';
+    document.getElementById('referrerUrl').textContent = logData.referrer_url || '-';
+
+    // Action Performed
+    document.getElementById('action').textContent = logData.action;
+    document.getElementById('endpoint').textContent = logData.endpoint || '-';
+    document.getElementById('method').textContent = logData.method;
+    document.getElementById('statusCode').textContent = logData.status_code || '-';
+    document.getElementById('actionStatus').textContent = logData.action_status;
+
+    // Authentication
+    document.getElementById('authMethod').textContent = logData.auth_method;
+    document.getElementById('sessionId').textContent = logData.session_id || '-';
+    document.getElementById('loginAttempts').textContent = logData.login_attempts;
+    document.getElementById('mfaUsed').textContent = logData.mfa_used ? 'Yes' : 'No';
+
+    // System Details
+    document.getElementById('appName').textContent = logData.app_name;
+    document.getElementById('module').textContent = logData.module || '-';
+    document.getElementById('serverHostname').textContent = logData.server_hostname || '-';
+    document.getElementById('protocol').textContent = logData.protocol;
+    document.getElementById('dataSize').textContent = logData.data_size_bytes ? logData.data_size_bytes + ' bytes' : '-';
+
+    // Data Tracking
+    document.getElementById('recordId').textContent = logData.record_id || '-';
+    document.getElementById('dataChanged').textContent = logData.data_changed || '-';
+    document.getElementById('queryExecuted').textContent = logData.query_executed || '-';
+
+    // Security & Compliance
+    document.getElementById('alertsTriggered').textContent = logData.alerts_triggered || '-';
+    document.getElementById('logHash').textContent = logData.log_hash ? logData.log_hash.substring(0, 16) + '...' : '-';
+    document.getElementById('retentionDays').textContent = logData.retention_days + ' days';
+    document.getElementById('tamperProof').textContent = logData.is_tamper_proof ? 'Yes' : 'No';
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('logDetailModal'));
+    modal.show();
+}
+
+// Add click handlers to table rows for detailed view
+document.addEventListener('DOMContentLoaded', function() {
+    const tableRows = document.querySelectorAll('tbody tr');
+    tableRows.forEach(row => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function() {
+            // Extract log data from row (this is a simplified version)
+            // In a real implementation, you'd want to pass the full log data
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 10) {
+                // For now, just show a message that detailed view is available
+                alert('Detailed log view is available. Click "View Details" button in a future enhancement.');
+            }
+        });
+    });
+});
+</script>
+
+<style>
+    .table-responsive::-webkit-scrollbar {
+        height: 6px;
+    }
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}

@@ -1,7 +1,36 @@
 {% extends 'base.html' %}
 {% block content %}
+<style>
+  @media print {
+    @page {
+      size: A4;
+      margin: 1cm;
+    }
 
-<div class="container" style="max-width:800px; padding-top:20px; padding-bottom:20px; position:relative;">
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    .navbar, nav, .btn:not([style*="position"]) {
+      display: none !important;
+    }
+
+    .container {
+      max-width: 900px !important;
+      margin: 0 auto !important;
+      padding: 20px !important;
+    }
+  }
+
+  /* Center container with balanced margins */
+  body {
+    display: flex;
+    justify-content: center;
+  }
+</style>
+
+<div class="container" style="max-width:800px; padding-top:20px; padding-bottom:20px; position:relative; margin: 0 auto;">
 
   <!-- ================= WATERMARK ================= -->
   <div style="

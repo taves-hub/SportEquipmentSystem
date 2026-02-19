@@ -2112,8 +2112,8 @@ def api_inventory_top():
 @login_required
 def api_return_conditions():
     """Return counts of returned items grouped by return_condition."""
-    rows = db.session.query(IssuedEquipment.return_condition, func.count(IssuedEquipment.id)).\
-        filter(IssuedEquipment.status == 'Returned').group_by(IssuedEquipment.return_condition).all()
+    rows = db.session.query(IssuedEquipment.return_conditions, func.count(IssuedEquipment.id)).\
+        filter(IssuedEquipment.status == 'Returned').group_by(IssuedEquipment.return_conditions).all()
 
     labels = []
     data = []
